@@ -1519,10 +1519,16 @@
             <button class="modal-close-x" onclick="closeBookModal()">✕</button>
             <h2 id="book-modal-title">Добавить книгу</h2>
             
-            <div class="form-group">
+            <!-- ИЗМЕНЕННЫЙ БЛОК: Поле Название с выпадающим списком -->
+            <div class="form-group author-wrapper">
                 <label>Название</label>
-                <input type="text" id="book-title" placeholder="Введите название...">
+                <div class="author-input-wrap">
+                    <input type="text" id="book-title" placeholder="Введите название..." autocomplete="off" oninput="handleTitleSearch(this)" onfocus="handleTitleSearch(this)">
+                    <div class="custom-dropdown author-suggestions title-suggestions"></div>
+                </div>
             </div>
+            <!-- КОНЕЦ ИЗМЕНЕННОГО БЛОКА -->
+
             <div class="form-group author-wrapper">
                 <label>Автор(ы)</label>
                 <div id="author-inputs-container"></div>
@@ -1683,6 +1689,111 @@
             quoteContext: null
         };
 
+        // --- НОВАЯ ЛОГИКА: Кэширование базы данных ---
+        let cachedDbBooks = null;
+        let dbFetchPromise = null;
+
+        async function fetchDbBooks() {
+            if (cachedDbBooks) return cachedDbBooks;
+            if (dbFetchPromise) return dbFetchPromise;
+
+            dbFetchPromise = (async () => {
+                try {
+                    if (typeof XLSX === 'undefined') throw new Error('XLSX not loaded');
+                    const EXCEL_URL = 'https://tturuturu1-blip.github.io/books-db/%D0%98%D0%BD%D1%84%D0%BE%D1%80%D0%BC%D0%B0%D1%86%D0%B8%D1%8F%20%D0%BE%20%D0%BA%D0%BD%D0%B8%D0%B3%D0%B0%D1%85.xlsx';
+                    
+                    console.log("Скачиваем базу данных Excel...");
+                    const res = await fetch(EXCEL_URL);
+                    if (!res.ok) throw new Error('Fetch failed');
+                    
+                    const arrayBuffer = await res.arrayBuffer();
+                    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    cachedDbBooks = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+                    
+                    console.log(`✅ База загружена. Всего строк: ${cachedDbBooks.length}`);
+                    return cachedDbBooks;
+                } catch (e) {
+                    console.error("DB load error:", e);
+                    dbFetchPromise = null; // Позволить повторить попытку при следующем вызове
+                    return [];
+                }
+            })();
+            
+            return dbFetchPromise;
+        }
+
+        // Функция поиска названий для автодополнения
+        async function handleTitleSearch(inputElement) {
+            const query = inputElement.value.toLowerCase().trim();
+            const dropdown = inputElement.nextElementSibling; // The .title-suggestions div
+            
+            if (query.length < 2) { 
+                dropdown.classList.remove('show'); 
+                return; 
+            }
+
+            // Показываем загрузку, если база еще не скачана
+            if (!cachedDbBooks) {
+                dropdown.innerHTML = '<div class="suggestion-item" style="color:#888; font-style:italic;">Загрузка базы...</div>';
+                dropdown.classList.add('show');
+            }
+
+            const books = await fetchDbBooks();
+            
+            // Если пользователь допечатал текст во время загрузки
+            const currentQuery = inputElement.value.toLowerCase().trim();
+            if (currentQuery !== query) return; 
+
+            dropdown.innerHTML = '';
+            if (books.length === 0) {
+                dropdown.classList.remove('show');
+                return;
+            }
+
+            const matches = new Set();
+            books.forEach(b => {
+                const title = b['Название'] || b['Title'] || '';
+                if (title && title.toLowerCase().includes(query)) {
+                    matches.add(title);
+                }
+            });
+
+            const matchedArray = Array.from(matches).slice(0, 15); // Ограничиваем до 15 вариантов
+
+            if (matchedArray.length === 0) { 
+                dropdown.classList.remove('show'); 
+                return; 
+            }
+
+            matchedArray.forEach(title => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.textContent = title;
+                div.onmousedown = (e) => { 
+                    e.preventDefault(); 
+                    inputElement.value = title; 
+                    dropdown.classList.remove('show'); 
+                    
+                    // Бонус: автозаполнение автора при выборе названия
+                    const matchBook = books.find(b => (b['Название'] || b['Title'] || '') === title);
+                    if (matchBook) {
+                        const authorField = matchBook['Автор(ы)'] || matchBook['Автор'] || matchBook['Author'] || '';
+                        if (authorField) {
+                            const authorInput = document.querySelector('.book-author-input');
+                            if (authorInput) {
+                                authorInput.value = authorField;
+                            }
+                        }
+                    }
+                };
+                dropdown.appendChild(div);
+            });
+            
+            dropdown.classList.add('show');
+        }
+        // --- КОНЕЦ НОВОЙ ЛОГИКИ ---
+
         let wishlistContext = { listId: null, bookId: null };
         let editingWishlistBookContext = { listId: null, bookId: null };
 
@@ -1721,6 +1832,9 @@
             initPatternsGrid();
             initStarRating();
             
+            // Предзагрузка базы данных для автодополнения
+            fetchDbBooks();
+
             document.getElementById('view-shelves-btn').classList.toggle('active', state.libraryViewMode === 'shelves');
             document.getElementById('view-grid-btn').classList.toggle('active', state.libraryViewMode === 'grid');
             
@@ -1738,6 +1852,7 @@
                 const wMenu = document.getElementById('wishlist-context-menu');
                 if (wMenu && !wMenu.contains(e.target)) wMenu.classList.remove('show');
                 
+                // Закрываем выпадающие списки (авторы, жанры, теги, названия)
                 document.querySelectorAll('.author-suggestions').forEach(dropdown => {
                     if (!dropdown.parentElement.contains(e.target)) {
                         dropdown.classList.remove('show');
@@ -2448,7 +2563,7 @@
             updateModalSpineUI();
 
             document.getElementById('book-modal').style.display = 'flex';
-            if (isNew) setTimeout(() => document.querySelector('.book-author-input')?.focus(), 100);
+            if (isNew) setTimeout(() => document.getElementById('book-title')?.focus(), 100);
         }
 
         function closeBookModal() {
@@ -2618,32 +2733,13 @@
                     throw new Error('Библиотека XLSX не загружена.');
                 }
 
-                // Прямая ссылка на файл через GitHub Pages
-                const EXCEL_URL = 'https://tturuturu1-blip.github.io/books-db/%D0%98%D0%BD%D1%84%D0%BE%D1%80%D0%BC%D0%B0%D1%86%D0%B8%D1%8F%20%D0%BE%20%D0%BA%D0%BD%D0%B8%D0%B3%D0%B0%D1%85.xlsx';
-
-                console.log("Скачиваем файл с GitHub Pages...");
-                const res = await fetch(EXCEL_URL, { cache: 'no-store' });
-                
-                if (!res.ok) {
-                    throw new Error(`Сервер вернул статус ${res.status}. Проверьте ссылку на файл.`);
-                }
-
-                const arrayBuffer = await res.arrayBuffer();
-                console.log(`✅ Файл скачан (${arrayBuffer.byteLength} байт)`);
-                updateProgress(50, 'Разбор таблицы...');
-
-                // Парсим Excel
-                const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                const dbBooks = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
-
+                // Используем кэшированную функцию загрузки
+                const dbBooks = await fetchDbBooks();
                 if (!dbBooks || dbBooks.length === 0) {
-                    throw new Error('Excel пустой или первая строка — не заголовки');
+                    throw new Error('Не удалось загрузить базу данных или она пуста.');
                 }
 
-                console.log(`✅ Загружено строк: ${dbBooks.length}`);
-                console.log("Доступные колонки:", Object.keys(dbBooks[0]));
-
+                updateProgress(50, 'Разбор таблицы...');
                 updateProgress(70, 'Поиск совпадений...');
 
                 // Нормализация строк
