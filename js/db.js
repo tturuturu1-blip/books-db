@@ -1,11 +1,14 @@
 // js/db.js
 // ============================================================
+// Слой данных: Dexie (IndexedDB), миграция из localStorage,
+// загрузка базы книг из XLSX.
+// ============================================================
 
 const CABINETS = ['reading', 'read', 'planned', 'paused', 'dropped'];
 const CABINET_LABELS = { reading: 'Читаю', read: 'Прочитано', planned: 'В планах', paused: 'На паузе', dropped: 'Брошено' };
 const SHELVES_PER_CABINET = 6;
 const SLOTS_PER_SHELF = 7;
-const TOTAL_SLOTS = SHELVES_PER_CABINET * SLOTS_PER_SHELF;
+const TOTAL_SLOTS = SHELVES_PER_CABINET * SLOTS_PER_SHELF; // 42
 
 const LEGACY_STORAGE_KEY = 'readingDiaryData_v7';
 const MIGRATION_KEY = 'migrated_v1';
@@ -35,8 +38,6 @@ db.version(2).stores({
         for (let item of items) {
             if (typeof item.id === 'number' || (typeof item.id === 'string' && item.id.length < 10)) {
                 const newId = generateUUID();
-                // Для книг нужно обновить ссылки в календаре? Нет, календарь ссылается на title.
-                // В wishlist и collections мы храним книги внутри JSON, там свои ID.
                 await tx.table(tableName).delete(item.id);
                 item.id = newId;
                 if (!item.updatedAt) item.updatedAt = item.createdAt || Date.now();
@@ -52,25 +53,29 @@ db.version(2).stores({
 async function migrateFromLocalStorage() {
     const flag = await db.meta.get(MIGRATION_KEY);
     if (flag && flag.value) return;
+    
     const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
     if (!raw) {
         await db.meta.put({ key: MIGRATION_KEY, value: true, at: Date.now() });
         return;
     }
+    
     let oldState;
     try { oldState = JSON.parse(raw); } catch (err) { return; }
+    
     const now = Date.now();
     const bookRecords = [];
-
     const library = oldState.library || {};
+    
     for (const cab of CABINETS) {
         const slots = Array.isArray(library[cab]) ? library[cab] : [];
         for (let slotIndex = 0; slotIndex < slots.length; slotIndex++) {
             const old = slots[slotIndex];
             if (!old || !old.title) continue;
             const d = old.details || {};
-            const genres = Array.isArray(d.genres) ? d.genres : (typeof d.genres === 'string' ? d.genres.split(',').map(g => g.trim()) : []);
-            const tags = Array.isArray(d.tags) ? d.tags : (typeof d.tags === 'string' ? d.tags.split(',').map(t => t.trim()) : []);
+            const genres = Array.isArray(d.genres) ? d.genres : (typeof d.genres === 'string' ? d.genres.split(',').map(g => g.trim()).filter(Boolean) : []);
+            const tags = Array.isArray(d.tags) ? d.tags : (typeof d.tags === 'string' ? d.tags.split(',').map(t => t.trim()).filter(Boolean) : []);
+            
             bookRecords.push({
                 id: generateUUID(), cabinet: cab, slot: slotIndex, title: old.title, author: old.author || '',
                 color: old.color || '#fcfaf5', pattern: old.pattern || '', cover: d.cover || '', spineImage: old.spineImage || '',
@@ -116,7 +121,7 @@ async function migrateFromLocalStorage() {
             if (wishlistRecords.length) await db.wishlists.bulkAdd(wishlistRecords);
             await db.meta.put({ key: MIGRATION_KEY, value: true, at: Date.now() });
         });
-    } catch (err) { console.error('Миграция не удалась:', err); throw err; }
+    } catch (err) { console.error('Миграция не удалась:', err); }
 }
 
 async function ensureDefaultWishlist() {
@@ -126,39 +131,181 @@ async function ensureDefaultWishlist() {
     }
 }
 
-// ... (Функции getAllBooks, getBooksByCabinet, getCabinetGrid, saveBookRecord, deleteBookRecord и т.д. остаются такими же, 
-// как в предыдущей версии, только теперь они работают со строковыми ID. Код функций копируется без изменений).
+// ============================================================
+// КНИГИ
+// ============================================================
+async function getAllBooks() {
+    return await db.books.toArray();
+}
 
+async function getBooksByCabinet(cabinet) {
+    const books = await db.books.where('cabinet').equals(cabinet).toArray();
+    return books.sort((a, b) => a.slot - b.slot);
+}
+
+async function getCabinetGrid(cabinet) {
+    const books = await getBooksByCabinet(cabinet);
+    const grid = new Array(TOTAL_SLOTS).fill(null);
+    books.forEach(b => {
+        if (b.slot >= 0 && b.slot < TOTAL_SLOTS) grid[b.slot] = b;
+    });
+    return grid;
+}
+
+async function saveBookRecord(book) {
+    const now = Date.now();
+    book.updatedAt = now;
+    if (!book.createdAt) book.createdAt = now;
+
+    if (book.id) {
+        await db.books.put(book);
+        return book.id;
+    }
+    const { id, ...rest } = book;
+    return await db.books.add(rest);
+}
+
+async function deleteBookRecord(id) {
+    await db.books.delete(id);
+}
+
+async function swapBookSlots(bookA, slotB, cabinetB) {
+    if (!bookA) return;
+    await db.books.update(bookA.id, { slot: slotB, cabinet: cabinetB, updatedAt: Date.now() });
+}
+
+// ============================================================
+// КАЛЕНДАРЬ
+// ============================================================
+async function getCalendarEntry(date) { return db.calendar.get(date); }
+
+async function getCalendarTitles(date) {
+    const entry = await db.calendar.get(date);
+    return entry && Array.isArray(entry.books) ? entry.books : [];
+}
+
+async function setCalendarTitles(date, titles) {
+    const unique = [...new Set((titles || []).filter(t => t && t.trim()))];
+    if (unique.length === 0) {
+        await db.calendar.delete(date);
+    } else {
+        await db.calendar.put({ date, books: unique });
+    }
+}
+
+async function getAllCalendar() {
+    return db.calendar.toArray();
+}
+
+// ============================================================
+// КОЛЛЕКЦИИ
+// ============================================================
+async function getCollections() {
+    return db.collections.toArray();
+}
+
+async function saveCollection(collection) {
+    if (collection.id) {
+        await db.collections.put(collection);
+        return collection.id;
+    }
+    const { id, ...rest } = collection;
+    return await db.collections.add(rest);
+}
+
+async function deleteCollection(id) {
+    await db.collections.delete(id);
+}
+
+// ============================================================
+// WISHLIST
+// ============================================================
+async function getWishlists() {
+    return db.wishlists.toArray();
+}
+
+async function saveWishlist(wishlist) {
+    if (wishlist.id) {
+        await db.wishlists.put(wishlist);
+        return wishlist.id;
+    }
+    const { id, ...rest } = wishlist;
+    return await db.wishlists.add(rest);
+}
+
+async function deleteWishlist(id) {
+    await db.wishlists.delete(id);
+}
+
+// ============================================================
+// XLSX БАЗА (поиск)
+// ============================================================
 let cachedDbBooks = null;
 let dbFetchPromise = null;
+
 async function fetchDbBooks(forceReload = false) {
     if (forceReload) { cachedDbBooks = null; dbFetchPromise = null; }
     if (cachedDbBooks) return cachedDbBooks;
     if (dbFetchPromise) return dbFetchPromise;
+    
     dbFetchPromise = (async () => {
         try {
             if (typeof XLSX === 'undefined') throw new Error('XLSX не загружен');
             const res = await fetch('book_info.xlsx');
-            if (!res.ok) throw new Error('Ошибка загрузки XLSX');
+            if (!res.ok) throw new Error('Ошибка загрузки XLSX: ' + res.status);
             const arrayBuffer = await res.arrayBuffer();
             const workbook = XLSX.read(arrayBuffer, { type: 'array' });
             const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
             cachedDbBooks = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
             return cachedDbBooks;
-        } catch (err) { console.error(err); dbFetchPromise = null; return []; }
+        } catch (err) {
+            console.error('Не удалось загрузить базу книг:', err);
+            dbFetchPromise = null;
+            return [];
+        }
     })();
     return dbFetchPromise;
 }
 
-// ... (Остальные CRUD-функции: getBooksByCabinet, getCabinetGrid, saveBookRecord, deleteBookRecord, 
-// getCalendarEntry, getCalendarTitles, setCalendarTitles, getAllCalendar, getCollections, saveCollection, 
-// deleteCollection, getWishlists, saveWishlist, deleteWishlist, dumpAllData, replaceAllData — 
-// остаются без изменений логики, просто работают с новой версией БД).
+// ============================================================
+// ЭКСПОРТ / ИМПОРТ
+// ============================================================
+async function dumpAllData() {
+    const [books, calendar, collections, wishlists] = await Promise.all([
+        db.books.toArray(), db.calendar.toArray(), db.collections.toArray(), db.wishlists.toArray()
+    ]);
+    return { version: 1, exportedAt: new Date().toISOString(), books, calendar, collections, wishlists };
+}
 
+async function replaceAllData(data) {
+    if (!data || typeof data !== 'object') throw new Error('Некорректный формат файла');
+    const books = Array.isArray(data.books) ? data.books : [];
+    const calendar = Array.isArray(data.calendar) ? data.calendar : [];
+    const collections = Array.isArray(data.collections) ? data.collections : [];
+    const wishlists = Array.isArray(data.wishlists) ? data.wishlists : [];
+
+    await db.transaction('rw', [db.books, db.calendar, db.collections, db.wishlists, db.meta], async () => {
+        await db.books.clear(); await db.calendar.clear();
+        await db.collections.clear(); await db.wishlists.clear();
+
+        if (books.length) await db.books.bulkAdd(books);
+        if (calendar.length) await db.calendar.bulkAdd(calendar);
+        if (collections.length) await db.collections.bulkAdd(collections);
+        if (wishlists.length) await db.wishlists.bulkAdd(wishlists);
+
+        await db.meta.put({ key: MIGRATION_KEY, value: true, at: Date.now() });
+    });
+}
+
+// ============================================================
+// ИНИЦИАЛИЗАЦИЯ
+// ============================================================
 async function initDb() {
     try {
         await migrateFromLocalStorage();
         await ensureDefaultWishlist();
         fetchDbBooks().catch(() => {});
-    } catch (err) { console.error('❌ Ошибка инициализации БД:', err); }
+    } catch (err) {
+        console.error('❌ Ошибка инициализации БД:', err);
+    }
 }
