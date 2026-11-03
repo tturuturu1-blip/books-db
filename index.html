@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
     <meta name="theme-color" content="#d2cbc0">
     <meta name="format-detection" content="telephone=no">
-    <title>Киибуит</title>
+    <title>КниБунт</title>
 
-    <!-- PWA Манифест (создадим позже) -->
+    <!-- PWA Манифест -->
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="assets/icon.png">
     <link rel="icon" type="image/png" href="assets/icon.png">
@@ -25,23 +25,25 @@
     <!-- ==================== ЭКРАН АВТОРИЗАЦИИ ==================== -->
     <div id="auth-screen" style="display: flex;">
         <div class="auth-card">
-            <img src="assets/icon.png" alt="Киибуит" class="auth-logo">
-            <h1 class="page-title" style="font-size: 2rem; margin-bottom: 10px; border-bottom: none;">Киибуит</h1>
-            <p class="text-center" style="margin-bottom: 25px; color: var(--ink-color); opacity: 0.7;">Твой магический читательский дневник</p>
+            <img src="assets/icon.png" alt="КниБунт" class="auth-logo">
+            <h1 class="auth-title">Книжный бунт</h1>
+            <p class="auth-subtitle">Твой волшебный читательский дневник</p>
             
-            <div class="form-group">
+            <div class="form-group" style="text-align: left;">
                 <label>Email</label>
                 <input type="email" id="auth-email" placeholder="you@example.com" autocomplete="email">
             </div>
-            <div class="form-group">
+            <div class="form-group" style="text-align: left;">
                 <label>Пароль</label>
                 <input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password">
             </div>
             
             <div id="auth-error" style="color: #d9534f; font-size: 13px; text-align: center; margin-bottom: 15px; display: none; font-weight: 600;"></div>
 
-            <button class="btn-save" style="width: 100%; margin-bottom: 12px;" onclick="handleAuth('login')">Войти</button>
-            <button class="btn-cancel" style="width: 100%;" onclick="handleAuth('register')">Зарегистрироваться</button>
+            <div class="auth-buttons">
+                <button class="btn-save" onclick="handleAuth('login')">Войти</button>
+                <button class="btn-cancel" onclick="handleAuth('register')">Зарегистрироваться</button>
+            </div>
         </div>
     </div>
 
@@ -80,7 +82,7 @@
                     <div class="menu-icon-lines"><span></span><span></span><span></span></div>
                 </button>
                 
-                <!-- Строка поиска (скрыта на некоторых страницах) -->
+                <!-- Строка поиска -->
                 <div class="search-container" id="search-container">
                     <input type="text" id="search-input" placeholder="Поиск книг..." oninput="handleLibrarySearch(this.value)">
                 </div>
@@ -431,7 +433,7 @@
 
     <!-- ==================== МОДАЛЬНЫЕ ОКНА ==================== -->
 
-    <!-- НОВОЕ: Модалка цели -->
+    <!-- Модалка цели -->
     <div class="modal-overlay" id="goal-modal">
         <div class="modal" style="max-width: 400px;">
             <button class="modal-close-x" onclick="closeGoalModal()">✕</button>
@@ -447,7 +449,7 @@
         </div>
     </div>
 
-    <!-- НОВОЕ: Кастомный confirm -->
+    <!-- Кастомный confirm -->
     <div class="modal-overlay" id="custom-confirm-modal">
         <div class="modal" style="max-width: 400px; text-align: center;">
             <h2 id="confirm-title" style="margin-bottom: 15px;">Подтверждение</h2>
@@ -459,6 +461,7 @@
         </div>
     </div>
 
+    <!-- Календарь -->
     <div class="modal-overlay" id="calendar-modal">
         <div class="modal" style="max-width: 550px;">
             <button class="modal-close-x" onclick="closeCalendarModal()">✕</button>
@@ -491,6 +494,7 @@
         </div>
     </div>
 
+    <!-- Прогресс -->
     <div class="modal-overlay" id="progress-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeProgressModal()">✕</button>
@@ -511,6 +515,7 @@
         </div>
     </div>
 
+    <!-- Перенос даты -->
     <div class="modal-overlay" id="move-date-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeMoveDateModal()">✕</button>
@@ -531,6 +536,7 @@
         </div>
     </div>
 
+    <!-- Впечатление -->
     <div class="modal-overlay" id="add-impression-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeAddImpressionModal()">✕</button>
@@ -546,6 +552,7 @@
         </div>
     </div>
 
+    <!-- Цитата из календаря -->
     <div class="modal-overlay" id="add-quote-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeAddQuoteModal()">✕</button>
@@ -561,6 +568,7 @@
         </div>
     </div>
 
+    <!-- Персонаж -->
     <div class="modal-overlay" id="character-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeCharacterModal()">✕</button>
@@ -587,6 +595,7 @@
         </div>
     </div>
 
+    <!-- Цитата (из деталей) -->
     <div class="modal-overlay" id="quote-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeQuoteModal()">✕</button>
@@ -602,6 +611,7 @@
         </div>
     </div>
 
+    <!-- Термин -->
     <div class="modal-overlay" id="term-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeTermModal()">✕</button>
@@ -621,6 +631,7 @@
         </div>
     </div>
 
+    <!-- Переименование -->
     <div class="modal-overlay" id="edit-list-name-modal">
         <div class="modal" style="max-width: 400px;">
             <button class="modal-close-x" onclick="closeEditListNameModal()">✕</button>
@@ -636,6 +647,7 @@
         </div>
     </div>
 
+    <!-- Контекстные меню -->
     <div id="context-menu">
         <div class="context-option" onclick="ctxDetails()">Подробнее</div>
         <div class="context-option" onclick="ctxEdit()">Редактировать</div>
@@ -650,6 +662,7 @@
         <div class="context-option danger" onclick="ctxWishlistDelete()">Удалить</div>
     </div>
 
+    <!-- Модалка книги -->
     <div class="modal-overlay" id="book-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeBookModal()">✕</button>
@@ -704,6 +717,7 @@
         </div>
     </div>
 
+    <!-- Модалка книги (Wishlist) -->
     <div class="modal-overlay" id="wishlist-book-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeWishlistBookModal()">✕</button>
@@ -739,6 +753,7 @@
         </div>
     </div>
 
+    <!-- Детали Wishlist -->
     <div class="modal-overlay" id="wishlist-details-modal">
         <div class="modal" style="text-align: center;">
             <button class="modal-close-x" onclick="document.getElementById('wishlist-details-modal').style.display='none'">✕</button>
@@ -748,6 +763,7 @@
         </div>
     </div>
 
+    <!-- Перенос Wishlist -->
     <div class="modal-overlay" id="move-to-list-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="document.getElementById('move-to-list-modal').style.display='none'">✕</button>
@@ -759,6 +775,7 @@
         </div>
     </div>
 
+    <!-- Перенос шкафа -->
     <div class="modal-overlay" id="move-cabinet-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeMoveCabinetModal()">✕</button>
@@ -777,6 +794,7 @@
         </div>
     </div>
 
+    <!-- Коллекции -->
     <div class="modal-overlay" id="collection-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeCollectionModal()">✕</button>
