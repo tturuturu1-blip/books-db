@@ -302,10 +302,26 @@ async function replaceAllData(data) {
 // ============================================================
 async function initDb() {
     try {
+        // Явно открываем базу, чтобы поймать ошибку несовместимости
+        await db.open();
+    } catch (error) {
+        // Если схема базы изменилась несовместимо (например, сменился primary key)
+        if (error.name === 'UpgradeError' || error.name === 'VersionError') {
+            console.warn('⚠️ Несовместимое изменение структуры БД. Пересоздаем базу...');
+            await db.delete(); // Удаляем старую базу
+            await db.open();   // Создаем новую
+        } else {
+            console.error('Ошибка открытия БД:', error);
+            return;
+        }
+    }
+
+    try {
         await migrateFromLocalStorage();
         await ensureDefaultWishlist();
         fetchDbBooks().catch(() => {});
+        console.log('✅ База данных готова');
     } catch (err) {
-        console.error('❌ Ошибка инициализации БД:', err);
+        console.error('❌ Ошибка инициализации данных:', err);
     }
 }
