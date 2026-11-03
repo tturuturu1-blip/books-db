@@ -179,7 +179,7 @@ input, textarea, .readonly-value, .detail-list-item-desc {
 
 .auth-logo {
     width: 100%;
-    max-width: 180px; /* Логотип больше не растягивается */
+    max-width: 180px;
     height: auto;
     display: block;
     margin: 0 auto 15px auto;
@@ -219,6 +219,15 @@ input, textarea, .readonly-value, .detail-list-item-desc {
 /* ============================================================
    ОСНОВНОЙ ИНТЕРФЕЙС
    ============================================================ */
+/* ИСПРАВЛЕНИЕ: Контейнер теперь занимает всю ширину и высоту */
+#main-app {
+    display: flex;
+    width: 100%;
+    height: 100%;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
 #overlay {
     display: none;
     position: fixed;
@@ -722,7 +731,7 @@ body.dark-theme .btn-cancel:hover { background: rgba(255,255,255,0.05); }
 .modal h2 { text-align: center; word-break: break-word; margin-top: 0; }
 
 /* ============================================================
-   КОНТЕКСТНЫЕ МЕНЮ (ИСПРАВЛЕНИЕ ВЫПАДАЮЩИХ БЛОКОВ)
+   КОНТЕКСТНЫЕ МЕНЮ
    ============================================================ */
 #context-menu,
 #wishlist-context-menu {
@@ -732,14 +741,14 @@ body.dark-theme .btn-cancel:hover { background: rgba(255,255,255,0.05); }
     border-radius: 6px;
     box-shadow: 2px 4px 15px rgba(0, 0, 0, 0.2);
     z-index: 3000;
-    display: none; /* Скрыто по умолчанию */
+    display: none;
     flex-direction: column;
     min-width: 180px;
     overflow: hidden;
 }
 #context-menu.show,
 #wishlist-context-menu.show {
-    display: flex; /* Показывается только по клику */
+    display: flex;
 }
 .context-option {
     padding: 12px 15px; cursor: pointer; font-size: 14px;
