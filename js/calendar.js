@@ -1,9 +1,5 @@
 // js/calendar.js
 // ============================================================
-// Календарь чтения: сетка, записи на день, прогресс, впечатления,
-// цитаты, перенос записей между датами.
-// Требует: utils.js, db.js, app.js, library.js.
-// ============================================================
 
 let currentCalendarDate = new Date();
 let selectedCalendarDateStr = '';
@@ -12,10 +8,6 @@ let moveContext = { sourceDate: null, title: null };
 
 const MONTH_NAMES_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 const WEEKDAYS_RU = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-
-// ============================================================
-// СЕТКА КАЛЕНДАРЯ
-// ============================================================
 
 async function renderCalendar() {
     const grid = document.getElementById('calendar-grid');
@@ -29,8 +21,7 @@ async function renderCalendar() {
 
     WEEKDAYS_RU.forEach(d => {
         const el = document.createElement('div');
-        el.className = 'calendar-day-name';
-        el.textContent = d;
+        el.className = 'calendar-day-name'; el.textContent = d;
         grid.appendChild(el);
     });
 
@@ -47,40 +38,32 @@ async function renderCalendar() {
         dayEl.className = 'calendar-day';
 
         const numEl = document.createElement('div');
-        numEl.className = 'calendar-day-number';
-        numEl.textContent = day;
+        numEl.className = 'calendar-day-number'; numEl.textContent = day;
         dayEl.appendChild(numEl);
 
         const titles = state.calendar[dateStr] || [];
         if (titles.length > 0) {
             const booksDiv = document.createElement('div');
             booksDiv.className = 'calendar-day-books';
-
             titles.forEach(title => {
                 const found = findBookByTitleLocal(title);
                 if (!found) return;
                 const b = found.book;
                 if (b.cover) {
                     const img = document.createElement('img');
-                    img.src = b.cover;
-                    img.className = 'calendar-mini-cover';
-                    img.alt = '';
-                    img.loading = 'lazy';
-                    img.title = title;
+                    img.src = b.cover; img.className = 'calendar-mini-cover'; img.alt = ''; img.loading = 'lazy'; img.title = title;
                     booksDiv.appendChild(img);
                 } else {
                     const fallback = document.createElement('div');
                     fallback.className = 'calendar-fallback-spine';
                     fallback.style.backgroundColor = b.color || '#ccc';
                     fallback.style.color = getContrastTextColor(b.color);
-                    fallback.textContent = title;
-                    fallback.title = title;
+                    fallback.textContent = title; fallback.title = title;
                     booksDiv.appendChild(fallback);
                 }
             });
             dayEl.appendChild(booksDiv);
         }
-
         dayEl.onclick = () => openCalendarModal(dateStr);
         grid.appendChild(dayEl);
     }
@@ -90,10 +73,6 @@ function changeMonth(offset) {
     currentCalendarDate.setMonth(currentCalendarDate.getMonth() + offset);
     renderCalendar();
 }
-
-// ============================================================
-// МОДАЛ ЗАПИСЕЙ НА ДЕНЬ
-// ============================================================
 
 function openCalendarModal(dateStr) {
     closeAllCustomDropdowns();
@@ -115,8 +94,8 @@ async function showCalendarEntriesView() {
 
     const list = document.getElementById('calendar-entries-list');
     list.innerHTML = '';
-
     const titles = state.calendar[selectedCalendarDateStr] || [];
+    
     if (titles.length === 0) {
         list.innerHTML = '<p class="text-center" style="color:#666; font-size:14px; padding:20px 0;">Нет записей на этот день.</p>';
         return;
@@ -135,12 +114,8 @@ async function showCalendarEntriesView() {
             coverHtml = `<div class="calendar-entry-cover" style="background-color:${escapeHtml(b.color || '#eee')}; color:${textColor}; display:flex; align-items:center; justify-content:center; text-align:center; font-size:12px; padding:5px; box-sizing:border-box;">${escapeHtml(title)}</div>`;
         }
 
-        const dailyProg = b.dailyProgress && b.dailyProgress[selectedCalendarDateStr]
-            ? b.dailyProgress[selectedCalendarDateStr]
-            : { current: 0, total: b.volume || 0 };
-        const percent = dailyProg.total > 0
-            ? Math.min(100, Math.round((dailyProg.current / dailyProg.total) * 100))
-            : 0;
+        const dailyProg = b.dailyProgress && b.dailyProgress[selectedCalendarDateStr] ? b.dailyProgress[selectedCalendarDateStr] : { current: 0, total: b.volume || 0 };
+        const percent = dailyProg.total > 0 ? Math.min(100, Math.round((dailyProg.current / dailyProg.total) * 100)) : 0;
         const progressHtml = dailyProg.total > 0 ? `
             <div class="calendar-entry-progress-container">
                 <div class="calendar-entry-progress-bar">
@@ -149,8 +124,6 @@ async function showCalendarEntriesView() {
                 <div class="calendar-entry-progress-text">${dailyProg.current} / ${dailyProg.total} (${percent}%)</div>
             </div>` : '';
 
-        // ВАЖНО: title/author экранируем, но в onclick передаём id, а не title
-        // (иначе кавычки в названии сломают атрибут). id всегда безопасен.
         const safeId = b.id;
 
         const itemDiv = document.createElement('div');
@@ -181,16 +154,12 @@ async function showCalendarEntriesView() {
                 </div>
             </div>`;
 
-        // Навешиваем обработчики через делегирование внутри карточки
         itemDiv.querySelectorAll('[data-action]').forEach(btn => {
             btn.addEventListener('click', (ev) => {
                 ev.stopPropagation();
-                const action = btn.dataset.action;
-                const bookId = Number(btn.dataset.id);
-                handleCalendarEntryAction(action, bookId);
+                handleCalendarEntryAction(btn.dataset.action, btn.dataset.id);
             });
         });
-
         list.appendChild(itemDiv);
     });
 }
@@ -202,10 +171,7 @@ async function handleCalendarEntryAction(action, bookId) {
     if (action === 'details' && typeof openDetails === 'function') {
         closeCalendarModal();
         state.detailsOrigin = 'calendar';
-        // Открываем по id: ищем в кеше
-        const cab = book.cabinet;
-        const slot = book.slot;
-        await openDetails(cab, slot);
+        await openDetails(book.cabinet, book.slot);
     } else if (action === 'progress') {
         openProgressModal(bookId);
     } else if (action === 'move') {
@@ -218,10 +184,6 @@ async function handleCalendarEntryAction(action, bookId) {
         openCalendarQuoteModal(book.title);
     }
 }
-
-// ============================================================
-// ДОБАВЛЕНИЕ КНИГИ В ДЕНЬ
-// ============================================================
 
 function showCalendarAddBookView() {
     closeAllCustomDropdowns();
@@ -239,14 +201,12 @@ function showCalendarAddBookView() {
         if (books.length === 0) return;
         total += books.length;
         const g = document.createElement('div');
-        g.className = 'custom-select-group';
-        g.textContent = label;
+        g.className = 'custom-select-group'; g.textContent = label;
         optionsContainer.appendChild(g);
         books.forEach(book => {
             if (!book) return;
             const opt = document.createElement('div');
-            opt.className = 'custom-select-option';
-            opt.textContent = book.title;
+            opt.className = 'custom-select-option'; opt.textContent = book.title;
             opt.onclick = (ev) => {
                 ev.stopPropagation();
                 document.getElementById('cal-selected-text').textContent = book.title;
@@ -265,18 +225,14 @@ function showCalendarAddBookView() {
 
     if (total === 0) {
         const empty = document.createElement('div');
-        empty.className = 'custom-select-option';
-        empty.textContent = 'Нет доступных книг в библиотеке';
+        empty.className = 'custom-select-option'; empty.textContent = 'Нет доступных книг в библиотеке';
         optionsContainer.appendChild(empty);
     }
 }
 
 async function saveCalendarPlan() {
     const title = document.getElementById('cal-selected-value').value;
-    if (!title || title === 'Нет доступных книг в библиотеке') {
-        showCalendarEntriesView();
-        return;
-    }
+    if (!title || title === 'Нет доступных книг в библиотеке') { showCalendarEntriesView(); return; }
     const current = state.calendar[selectedCalendarDateStr] || [];
     if (!current.includes(title)) {
         current.push(title);
@@ -284,28 +240,20 @@ async function saveCalendarPlan() {
             await setCalendarTitles(selectedCalendarDateStr, current);
             await syncCalendarFromDb();
             await renderCalendar();
+            if (typeof syncAll === 'function') syncAll();
         } catch (err) {
-            console.error('Ошибка добавления в календарь:', err);
-            alert('Не удалось сохранить: ' + err.message);
+            showToast('Не удалось сохранить: ' + err.message, 'error');
         }
     }
     showCalendarEntriesView();
 }
 
-// ============================================================
-// ПРОГРЕСС ЧТЕНИЯ
-// ============================================================
-
 async function openProgressModal(bookId) {
     const book = await db.books.get(bookId);
     if (!book) return;
-
     state.progressContext = { bookId, dateStr: selectedCalendarDateStr };
     document.getElementById('progress-book-title').textContent = `«${book.title}» (${formatDateRu(selectedCalendarDateStr)})`;
-
-    const dailyProg = book.dailyProgress && book.dailyProgress[selectedCalendarDateStr]
-        ? book.dailyProgress[selectedCalendarDateStr]
-        : { current: '', total: book.volume || '' };
+    const dailyProg = book.dailyProgress && book.dailyProgress[selectedCalendarDateStr] ? book.dailyProgress[selectedCalendarDateStr] : { current: '', total: book.volume || '' };
     document.getElementById('progress-current-page').value = dailyProg.current || '';
     document.getElementById('progress-total-pages').value = dailyProg.total || '';
     document.getElementById('progress-modal').style.display = 'flex';
@@ -327,23 +275,15 @@ async function saveProgress() {
         if (!book) return;
         const dailyProgress = { ...(book.dailyProgress || {}) };
         dailyProgress[dateStr] = { current, total };
-        await db.books.update(bookId, {
-            dailyProgress,
-            volume: total || book.volume || 0,
-            updatedAt: Date.now()
-        });
+        await db.books.update(bookId, { dailyProgress, volume: total || book.volume || 0, updatedAt: Date.now() });
         await syncLibraryFromDb();
         closeProgressModal();
         await showCalendarEntriesView();
+        if (typeof syncAll === 'function') syncAll();
     } catch (err) {
-        console.error('Ошибка сохранения прогресса:', err);
-        alert('Не удалось сохранить прогресс: ' + err.message);
+        showToast('Не удалось сохранить прогресс: ' + err.message, 'error');
     }
 }
-
-// ============================================================
-// ВПЕЧАТЛЕНИЯ ИЗ КАЛЕНДАРЯ
-// ============================================================
 
 function openCalendarImpressionModal(title) {
     state.impressionContext = { type: 'calendar', title };
@@ -361,7 +301,6 @@ async function saveCalendarImpression() {
     if (!state.impressionContext) return;
     const text = document.getElementById('imp-modal-text').value.trim();
     if (!text) return;
-
     try {
         if (state.impressionContext.type === 'calendar') {
             const found = findBookByTitleLocal(state.impressionContext.title);
@@ -371,22 +310,16 @@ async function saveCalendarImpression() {
             impressions.push({ text, date: selectedCalendarDateStr });
             await db.books.update(book.id, { impressions, updatedAt: Date.now() });
             await syncLibraryFromDb();
+            if (typeof syncAll === 'function') syncAll();
         } else if (state.impressionContext.type === 'details') {
-            if (typeof saveImpressionFromDetails === 'function') {
-                await saveImpressionFromDetails(text);
-            }
+            if (typeof saveImpressionFromDetails === 'function') await saveImpressionFromDetails(text);
         }
         closeAddImpressionModal();
         await showCalendarEntriesView();
     } catch (err) {
-        console.error('Ошибка сохранения впечатления:', err);
-        alert('Не удалось сохранить: ' + err.message);
+        showToast('Ошибка сохранения: ' + err.message, 'error');
     }
 }
-
-// ============================================================
-// ЦИТАТЫ ИЗ КАЛЕНДАРЯ
-// ============================================================
 
 function openCalendarQuoteModal(title) {
     state.quoteContext = { type: 'calendar', title };
@@ -404,7 +337,6 @@ async function saveCalendarQuote() {
     if (!state.quoteContext) return;
     const text = document.getElementById('quote-modal-text').value.trim();
     if (!text) return;
-
     try {
         if (state.quoteContext.type === 'calendar') {
             const found = findBookByTitleLocal(state.quoteContext.title);
@@ -414,18 +346,14 @@ async function saveCalendarQuote() {
             quotes.push({ text, date: selectedCalendarDateStr });
             await db.books.update(book.id, { quotes, updatedAt: Date.now() });
             await syncLibraryFromDb();
+            if (typeof syncAll === 'function') syncAll();
         }
         closeAddQuoteModal();
         await showCalendarEntriesView();
     } catch (err) {
-        console.error('Ошибка сохранения цитаты:', err);
-        alert('Не удалось сохранить: ' + err.message);
+        showToast('Ошибка сохранения: ' + err.message, 'error');
     }
 }
-
-// ============================================================
-// ПЕРЕНОС ЗАПИСИ НА ДРУГУЮ ДАТУ
-// ============================================================
 
 function calendarEntryMove(title) {
     moveContext = { sourceDate: selectedCalendarDateStr, title };
@@ -451,16 +379,14 @@ function renderMoveCalendar() {
 
     WEEKDAYS_RU.forEach(d => {
         const el = document.createElement('div');
-        el.className = 'calendar-day-name';
-        el.textContent = d;
+        el.className = 'calendar-day-name'; el.textContent = d;
         grid.appendChild(el);
     });
 
     const startOffset = firstDay === 0 ? 6 : firstDay - 1;
     for (let i = 0; i < startOffset; i++) {
         const el = document.createElement('div');
-        el.className = 'calendar-day empty';
-        grid.appendChild(el);
+        el.className = 'calendar-day empty'; grid.appendChild(el);
     }
 
     for (let day = 1; day <= daysInMonth; day++) {
@@ -470,10 +396,8 @@ function renderMoveCalendar() {
         dayEl.style.minHeight = '60px';
 
         const numEl = document.createElement('div');
-        numEl.className = 'calendar-day-number';
-        numEl.textContent = day;
+        numEl.className = 'calendar-day-number'; numEl.textContent = day;
         dayEl.appendChild(numEl);
-
         dayEl.onclick = () => executeMoveDate(dateStr);
         grid.appendChild(dayEl);
     }
@@ -493,26 +417,18 @@ async function executeMoveDate(newDateStr) {
             sourceTitles.splice(idx, 1);
             await setCalendarTitles(moveContext.sourceDate, sourceTitles);
         }
-
         const targetTitles = [...(state.calendar[newDateStr] || [])];
-        if (!targetTitles.includes(moveContext.title)) {
-            targetTitles.push(moveContext.title);
-        }
+        if (!targetTitles.includes(moveContext.title)) targetTitles.push(moveContext.title);
         await setCalendarTitles(newDateStr, targetTitles);
-
         await syncCalendarFromDb();
         await renderCalendar();
         closeMoveDateModal();
         await showCalendarEntriesView();
+        if (typeof syncAll === 'function') syncAll();
     } catch (err) {
-        console.error('Ошибка переноса:', err);
-        alert('Не удалось перенести: ' + err.message);
+        showToast('Ошибка переноса: ' + err.message, 'error');
     }
 }
-
-// ============================================================
-// УДАЛЕНИЕ ЗАПИСИ ИЗ ДНЯ
-// ============================================================
 
 async function calendarEntryDelete(title) {
     try {
@@ -524,15 +440,11 @@ async function calendarEntryDelete(title) {
         await syncCalendarFromDb();
         await renderCalendar();
         await showCalendarEntriesView();
+        if (typeof syncAll === 'function') syncAll();
     } catch (err) {
-        console.error('Ошибка удаления записи:', err);
-        alert('Не удалось удалить: ' + err.message);
+        showToast('Ошибка удаления: ' + err.message, 'error');
     }
 }
-
-// ============================================================
-// КАСТОМНЫЙ СЕЛЕКТ (используется в calendar и collections)
-// ============================================================
 
 function closeAllCustomDropdowns() {
     document.querySelectorAll('.custom-select-wrapper').forEach(w => w.classList.remove('open'));
