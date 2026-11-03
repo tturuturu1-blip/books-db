@@ -557,10 +557,27 @@ h1, h2, h3 {
    ШКАФЫ, ПОЛКИ И КНИГИ
    ============================================================ */
 .cabinets-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-    gap: 35px; margin-top: 10px;
+    display: grid;
+    /* Уменьшаем минимальную ширину до 300px, чтобы 2 шкафа влезали легче */
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+    margin-top: 10px;
 }
-@media (max-width: 700px) { .cabinets-grid { grid-template-columns: 1fr; } }
+
+/* Явно задаем 2 колонки для планшетов (от 601px до 1024px) */
+@media (min-width: 601px) and (max-width: 1024px) {
+    .cabinets-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+}
+
+/* Для мобильных телефонов оставляем 1 колонку */
+@media (max-width: 600px) {
+    .cabinets-grid {
+        grid-template-columns: 1fr;
+    }
+}
 
 .cabinet {
     position: relative; background-color: var(--paper-bg);
