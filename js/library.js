@@ -1,20 +1,12 @@
 // js/library.js
 // ============================================================
 // Шкафы, полки, плитка, книга-модал, drag & drop, контекстное меню,
-// «Читаю сейчас», рекомендации.
+// «Читаю сейчас», рекомендации, поиск.
 // Требует: utils.js, db.js, app.js.
 // ============================================================
 
-// Состояние drag & drop
-let draggedItem = null; // { cabinet, slot }
-
-// Временное состояние модала
+let draggedItem = null; 
 let tempSpineImage = '';
-let tempCoverImage = '';
-
-// ============================================================
-// РЕНДЕР БИБЛИОТЕКИ
-// ============================================================
 
 async function renderLibrary() {
     if (state.libraryViewMode === 'grid') {
@@ -31,6 +23,7 @@ async function renderLibrary() {
 function renderShelvesView() {
     const container = document.getElementById('cabinets-container');
     container.innerHTML = '';
+    const query = state.searchQuery || '';
 
     CABINETS.forEach(cab => {
         const cabinetDiv = document.createElement('div');
@@ -50,7 +43,16 @@ function renderShelvesView() {
             for (let i = 0; i < SLOTS_PER_SHELF; i++) {
                 const globalSlot = s * SLOTS_PER_SHELF + i;
                 const heightClass = globalSlot % 4 === 0 ? 'h-tall' : (globalSlot % 3 === 0 ? 'h-short' : '');
-                booksWrapper.appendChild(createBookElement(cab, globalSlot, heightClass));
+                
+                // Фильтрация поиска
+                let book = state.library[cab][globalSlot];
+                if (query && book) {
+                    const match = (book.title && book.title.toLowerCase().includes(query)) || 
+                                  (book.author && book.author.toLowerCase().includes(query));
+                    if (!match) book = null; // Скрываем несовпадающие книги
+                }
+                
+                booksWrapper.appendChild(createBookElement(cab, globalSlot, heightClass, book));
             }
             shelfDiv.appendChild(booksWrapper);
             cabinetDiv.appendChild(shelfDiv);
@@ -63,10 +65,9 @@ function renderShelvesView() {
     });
 }
 
-function createBookElement(cabinet, slot, heightClass) {
-    const book = state.library[cabinet][slot];
+function createBookElement(cabinet, slot, heightClass, bookData) {
+    const book = bookData;
     const bookDiv = document.createElement('div');
-
     let dynamicWidthClass = '';
     if (book && book.title) {
         const len = book.title.length;
@@ -83,10 +84,8 @@ function createBookElement(cabinet, slot, heightClass) {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', '');
         });
-
         bookDiv.addEventListener('dragover', (e) => e.preventDefault());
         bookDiv.addEventListener('drop', (e) => handleDrop(e, cabinet, slot));
-
         bookDiv.classList.add('filled');
 
         if (book.spineImage) {
@@ -109,7 +108,6 @@ function createBookElement(cabinet, slot, heightClass) {
                 topP.textContent = book.pattern;
                 contentDiv.appendChild(topP);
             }
-
             const textDiv = document.createElement('div');
             textDiv.className = 'spine-text';
             textDiv.textContent = book.title || '';
@@ -124,35 +122,36 @@ function createBookElement(cabinet, slot, heightClass) {
             }
             bookDiv.appendChild(contentDiv);
         }
-
         bookDiv.title = `${book.title || ''} — ${book.author || ''}`;
-        bookDiv.onclick = (e) => {
-            e.stopPropagation();
-            openContextMenu(e, cabinet, slot);
-        };
+        bookDiv.onclick = (e) => { e.stopPropagation(); openContextMenu(e, cabinet, slot); };
     } else {
         bookDiv.classList.add('empty');
         bookDiv.onclick = () => openBookModal(cabinet, slot, true, false);
-        // Пустой слот тоже принимает drop
         bookDiv.addEventListener('dragover', (e) => e.preventDefault());
         bookDiv.addEventListener('drop', (e) => handleDrop(e, cabinet, slot));
     }
-
     return bookDiv;
 }
 
 function renderGridView() {
     const container = document.getElementById('grid-view-container');
     container.innerHTML = '';
+    const query = state.searchQuery || '';
 
     CABINETS.forEach(cab => {
-        const books = state.library[cab].filter(b => b !== null);
+        let books = state.library[cab].filter(b => b !== null);
+        if (query) {
+            books = books.filter(b => 
+                (b.title && b.title.toLowerCase().includes(query)) || 
+                (b.author && b.author.toLowerCase().includes(query))
+            );
+        }
+        
         const groupDiv = document.createElement('div');
         groupDiv.className = 'grid-cabinet-group';
 
         const headerDiv = document.createElement('div');
         headerDiv.className = 'grid-cabinet-header';
-
         const titleDiv = document.createElement('div');
         titleDiv.className = 'grid-cabinet-title';
         titleDiv.textContent = CABINET_LABELS[cab];
@@ -175,10 +174,7 @@ function renderGridView() {
             books.forEach(book => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'grid-book-item';
-                itemDiv.onclick = (e) => {
-                    e.stopPropagation();
-                    openContextMenu(e, cab, book.slot);
-                };
+                itemDiv.onclick = (e) => { e.stopPropagation(); openContextMenu(e, cab, book.slot); };
 
                 let coverHtml;
                 if (book.cover) {
@@ -189,7 +185,6 @@ function renderGridView() {
                         <span style="font-family:'Playfair Display',serif; font-size:11px; font-weight:600; line-height:1.1; max-height:80%; overflow:hidden; padding:2px; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical;">${escapeHtml(book.title)}</span>
                     </div>`;
                 }
-
                 itemDiv.innerHTML = `${coverHtml}<div class="grid-book-title">${escapeHtml(book.title)}</div>`;
                 wrapper.appendChild(itemDiv);
             });
@@ -199,17 +194,11 @@ function renderGridView() {
     });
 }
 
-// ============================================================
-// DRAG & DROP
-// ============================================================
-
 async function handleDrop(e, targetCabinet, targetSlot) {
     e.preventDefault();
     if (!draggedItem) return;
-
     const src = draggedItem;
     draggedItem = null;
-
     if (src.cabinet === targetCabinet && src.slot === targetSlot) return;
 
     const srcBook = state.library[src.cabinet][src.slot];
@@ -218,55 +207,37 @@ async function handleDrop(e, targetCabinet, targetSlot) {
 
     try {
         if (targetBook) {
-            // Обмен местами
             await db.transaction('rw', db.books, async () => {
                 await db.books.update(srcBook.id, { cabinet: targetCabinet, slot: targetSlot, updatedAt: Date.now() });
                 await db.books.update(targetBook.id, { cabinet: src.cabinet, slot: src.slot, updatedAt: Date.now() });
             });
         } else {
-            // Перемещение в пустой слот
             await db.books.update(srcBook.id, { cabinet: targetCabinet, slot: targetSlot, updatedAt: Date.now() });
         }
         await syncLibraryFromDb();
-        invalidateAuthorCache();
-        invalidateGenreCache();
-        invalidateTagsCache();
+        invalidateAuthorCache(); invalidateGenreCache(); invalidateTagsCache();
         await renderLibrary();
+        if (typeof syncAll === 'function') syncAll();
     } catch (err) {
-        console.error('Ошибка перемещения:', err);
-        alert('Не удалось переместить книгу: ' + err.message);
+        showToast('Не удалось переместить книгу', 'error');
     }
 }
 
-// ============================================================
-// КОНТЕКСТНОЕ МЕНЮ
-// ============================================================
-
 function openContextMenu(e, cabinet, slot) {
     e.stopPropagation();
-    state.editContext = {
-        ...state.editContext,
-        category: cabinet,
-        index: slot,
-        bookId: state.library[cabinet][slot]?.id || null
-    };
-
+    state.editContext = { ...state.editContext, category: cabinet, index: slot, bookId: state.library[cabinet][slot]?.id || null };
     const menu = document.getElementById('context-menu');
-    let x = e.clientX;
-    let y = e.clientY;
+    let x = e.clientX, y = e.clientY;
     if (x + 190 > window.innerWidth) x = window.innerWidth - 200;
     if (y + 150 > window.innerHeight) y = window.innerHeight - 160;
-    menu.style.top = y + 'px';
-    menu.style.left = x + 'px';
+    menu.style.top = y + 'px'; menu.style.left = x + 'px';
     menu.classList.add('show');
 }
 
 async function ctxDetails() {
     document.getElementById('context-menu').classList.remove('show');
     const { category, index } = state.editContext;
-    if (typeof openDetails === 'function') {
-        await openDetails(category, index);
-    }
+    if (typeof openDetails === 'function') await openDetails(category, index);
 }
 
 async function ctxEdit() {
@@ -280,17 +251,17 @@ async function ctxDelete() {
     const { category, index } = state.editContext;
     const book = state.library[category][index];
     if (!book || !book.id) return;
-    if (!confirm(`Удалить «${book.title}»?`)) return;
+    if (!await showConfirm('Удалить книгу', `Удалить «${book.title}» навсегда?`)) return;
+    
     try {
         await deleteBookRecord(book.id);
         await syncLibraryFromDb();
-        invalidateAuthorCache();
-        invalidateGenreCache();
-        invalidateTagsCache();
+        invalidateAuthorCache(); invalidateGenreCache(); invalidateTagsCache();
         await renderLibrary();
+        if (typeof syncAll === 'function') syncAll();
+        showToast('Книга удалена', 'success');
     } catch (err) {
-        console.error('Ошибка удаления:', err);
-        alert('Не удалось удалить: ' + err.message);
+        showToast('Ошибка удаления: ' + err.message, 'error');
     }
 }
 
@@ -313,42 +284,30 @@ async function executeMoveToCabinet(targetCab) {
     if (!book || !book.id) { closeMoveCabinetModal(); return; }
     if (targetCab === category) { closeMoveCabinetModal(); return; }
 
-    // Ищем первый пустой слот в целевом шкафу
     const targetGrid = state.library[targetCab];
     const emptySlot = targetGrid.findIndex(b => b === null);
     if (emptySlot === -1) {
-        alert('В этом шкафу нет свободного места.');
+        showToast('В этом шкафу нет свободного места', 'error');
         closeMoveCabinetModal();
         return;
     }
 
     try {
-        await db.books.update(book.id, {
-            cabinet: targetCab,
-            slot: emptySlot,
-            updatedAt: Date.now()
-        });
+        await db.books.update(book.id, { cabinet: targetCab, slot: emptySlot, updatedAt: Date.now() });
         await syncLibraryFromDb();
         await renderLibrary();
+        if (typeof syncAll === 'function') syncAll();
     } catch (err) {
-        console.error('Ошибка переноса:', err);
-        alert('Не удалось перенести: ' + err.message);
+        showToast('Не удалось перенести: ' + err.message, 'error');
     }
     closeMoveCabinetModal();
 }
 
 function openAddBookFromGrid(cabinet) {
     const emptySlot = state.library[cabinet].findIndex(b => b === null);
-    if (emptySlot !== -1) {
-        openBookModal(cabinet, emptySlot, true, true);
-    } else {
-        alert('В этом разделе нет свободного места.');
-    }
+    if (emptySlot !== -1) openBookModal(cabinet, emptySlot, true, true);
+    else showToast('В этом разделе нет свободного места', 'error');
 }
-
-// ============================================================
-// МОДАЛ КНИГИ
-// ============================================================
 
 function openBookModal(cabinet, slot, isNew, isGrid) {
     state.editContext.category = cabinet;
@@ -366,7 +325,6 @@ function openBookModal(cabinet, slot, isNew, isGrid) {
         document.getElementById('spine-customization-section').style.display = 'none';
         document.getElementById('image-upload-label').textContent = 'Добавить обложку';
         tempSpineImage = book?.cover || '';
-        tempCoverImage = '';
     } else {
         document.getElementById('spine-customization-section').style.display = 'block';
         document.getElementById('image-upload-label').textContent = 'Добавить корешок';
@@ -374,7 +332,6 @@ function openBookModal(cabinet, slot, isNew, isGrid) {
         tempSpineImage = book?.spineImage || '';
     }
 
-    // Авторы
     const authorsContainer = document.getElementById('author-inputs-container');
     authorsContainer.innerHTML = '';
     let authorsArr = [''];
@@ -384,7 +341,6 @@ function openBookModal(cabinet, slot, isNew, isGrid) {
     }
     authorsArr.forEach((a, i) => addAuthorRow(i === 0, a));
 
-    // Узор
     document.getElementById('book-pattern').value = '';
     document.querySelectorAll('#patterns-grid .pattern-option').forEach(el => el.classList.remove('selected'));
     if (book && book.pattern && !isGrid) {
@@ -409,34 +365,24 @@ function updateModalSpineUI() {
     document.getElementById('modal-spine-url').value = '';
     const statusEl = document.getElementById('cover-status');
     if (statusEl) { statusEl.textContent = ''; statusEl.style.color = ''; }
-
     const preview = document.getElementById('modal-spine-preview');
     const img = document.getElementById('modal-spine-img');
-    if (tempSpineImage) {
-        img.src = tempSpineImage;
-        preview.style.display = 'flex';
-    } else {
-        img.src = '';
-        preview.style.display = 'none';
-    }
+    if (tempSpineImage) { img.src = tempSpineImage; preview.style.display = 'flex'; }
+    else { img.src = ''; preview.style.display = 'none'; }
 }
 
 async function handleSpineFileInModal(event) {
     const file = event.target.files[0];
     const statusEl = document.getElementById('cover-status');
     if (!file) return;
-
     try {
-        statusEl.textContent = 'Обработка…';
-        statusEl.style.color = '#888';
+        statusEl.textContent = 'Обработка…'; statusEl.style.color = '#888';
         tempSpineImage = await compressImage(file, 800, 0.75);
-        statusEl.textContent = '✓ Готово';
-        statusEl.style.color = '#28a745';
+        statusEl.textContent = '✓ Готово'; statusEl.style.color = '#28a745';
         document.getElementById('modal-spine-img').src = tempSpineImage;
         document.getElementById('modal-spine-preview').style.display = 'flex';
     } catch (err) {
-        statusEl.textContent = '✗ ' + (err.message || 'Ошибка');
-        statusEl.style.color = '#d9534f';
+        statusEl.textContent = '✗ ' + (err.message || 'Ошибка'); statusEl.style.color = '#d9534f';
     }
     event.target.value = '';
 }
@@ -444,28 +390,18 @@ async function handleSpineFileInModal(event) {
 function applySpineUrlInModal() {
     const url = document.getElementById('modal-spine-url').value.trim();
     const statusEl = document.getElementById('cover-status');
-    if (!url) {
-        statusEl.textContent = '';
-        return;
-    }
-    if (!isImageUrl(url)) {
-        statusEl.textContent = '✗ Некорректная ссылка';
-        statusEl.style.color = '#d9534f';
-        return;
-    }
-    statusEl.textContent = 'Загрузка…';
-    statusEl.style.color = '#888';
+    if (!url) { statusEl.textContent = ''; return; }
+    if (!isImageUrl(url)) { statusEl.textContent = '✗ Некорректная ссылка'; statusEl.style.color = '#d9534f'; return; }
+    statusEl.textContent = 'Загрузка…'; statusEl.style.color = '#888';
     const img = new Image();
     img.onload = () => {
         tempSpineImage = url;
-        statusEl.textContent = '✓ Готово';
-        statusEl.style.color = '#28a745';
+        statusEl.textContent = '✓ Готово'; statusEl.style.color = '#28a745';
         document.getElementById('modal-spine-img').src = url;
         document.getElementById('modal-spine-preview').style.display = 'flex';
     };
     img.onerror = () => {
-        statusEl.textContent = '✗ Ошибка загрузки';
-        statusEl.style.color = '#d9534f';
+        statusEl.textContent = '✗ Ошибка загрузки'; statusEl.style.color = '#d9534f';
         document.getElementById('modal-spine-preview').style.display = 'none';
     };
     img.src = url;
@@ -477,23 +413,21 @@ async function saveBook() {
     const authors = Array.from(authorInputs).map(i => i.value.trim()).filter(Boolean);
     const author = authors.join(', ');
 
-    if (!title) { alert('Введите название книги'); return; }
-    if (!author) { alert('Введите хотя бы одного автора'); return; }
+    if (!title) { showToast('Введите название книги', 'error'); return; }
+    if (!author) { showToast('Введите хотя бы одного автора', 'error'); return; }
 
     const { category, index, isNew, isGrid, bookId } = state.editContext;
     const existing = isNew ? null : state.library[category][index];
 
     const record = {
-        id: bookId || undefined,
+        id: bookId || generateUUID(), // Генерируем UUID для новой книги
         cabinet: category,
         slot: index,
-        title,
-        author,
+        title, author,
         color: isGrid ? (existing?.color || '#fcfaf5') : document.getElementById('book-color').value,
         pattern: isGrid ? '' : document.getElementById('book-pattern').value,
         spineImage: isGrid ? '' : (tempSpineImage || ''),
         cover: isGrid ? (tempSpineImage || '') : (existing?.cover || ''),
-        // Сохраняем все поля, которые могли быть заполнены на странице деталей
         rating: existing?.rating || 0,
         genres: existing?.genres || [],
         tags: existing?.tags || [],
@@ -521,31 +455,24 @@ async function saveBook() {
     try {
         await saveBookRecord(record);
         await syncLibraryFromDb();
-        invalidateAuthorCache();
-        invalidateGenreCache();
-        invalidateTagsCache();
+        invalidateAuthorCache(); invalidateGenreCache(); invalidateTagsCache();
         await renderLibrary();
         closeBookModal();
+        if (typeof syncAll === 'function') syncAll();
+        showToast('Книга сохранена', 'success');
     } catch (err) {
-        console.error('Ошибка сохранения книги:', err);
-        alert('Не удалось сохранить книгу: ' + err.message);
+        showToast('Не удалось сохранить: ' + err.message, 'error');
     }
 }
-
-// ============================================================
-// АВТОРЫ (многострочное поле с автодополнением)
-// ============================================================
 
 function addAuthorRow(isFirst, value) {
     const container = document.getElementById('author-inputs-container');
     const row = document.createElement('div');
     row.className = 'author-row';
-
     const removeBtnHtml = !isFirst ? `
         <button type="button" class="remove-author-btn" onclick="this.closest('.author-row').remove()" title="Удалить автора">
             <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
         </button>` : '';
-
     row.innerHTML = `
         <div class="author-input-wrap">
             <input type="text" class="book-author-input" value="${escapeHtml(value || '')}" autocomplete="off" placeholder="Начните вводить..." oninput="handleAuthorSearch(this)" onfocus="handleAuthorSearch(this)">
@@ -566,63 +493,38 @@ function handleSuggestSearch(input, getListFunc) {
     const dropdown = input.nextElementSibling;
     dropdown.innerHTML = '';
     if (query.length === 0) { dropdown.classList.remove('show'); return; }
-
     const matches = getListFunc().filter(a => a.toLowerCase().includes(query)).slice(0, 12);
     if (matches.length === 0) { dropdown.classList.remove('show'); return; }
-
     matches.forEach(item => {
         const div = document.createElement('div');
         div.className = 'suggestion-item';
         div.textContent = item;
-        div.onmousedown = (e) => {
-            e.preventDefault();
-            input.value = item;
-            dropdown.classList.remove('show');
-        };
+        div.onmousedown = (e) => { e.preventDefault(); input.value = item; dropdown.classList.remove('show'); };
         dropdown.appendChild(div);
     });
     dropdown.classList.add('show');
 }
 
-// ============================================================
-// ПОИСК НАЗВАНИЙ В XLSX
-// ============================================================
-
 const _handleTitleSearchDebounced = debounce(async (input) => {
     const query = input.value.toLowerCase().trim();
     const dropdown = input.nextElementSibling;
     if (!dropdown) return;
-
-    if (query.length < 2) {
-        dropdown.classList.remove('show');
-        return;
-    }
-
+    if (query.length < 2) { dropdown.classList.remove('show'); return; }
     if (!cachedDbBooks) {
         dropdown.innerHTML = '<div class="suggestion-item" style="color:#888; font-style:italic;">Загрузка базы…</div>';
         dropdown.classList.add('show');
     }
-
     const books = await fetchDbBooks();
-
-    // Пользователь мог допечатать за время загрузки
     if (input.value.toLowerCase().trim() !== query) return;
-
     dropdown.innerHTML = '';
-    if (!books || books.length === 0) {
-        dropdown.classList.remove('show');
-        return;
-    }
-
+    if (!books || books.length === 0) { dropdown.classList.remove('show'); return; }
     const matches = new Set();
     books.forEach(b => {
         const title = b['Название'] || b['Title'] || '';
         if (title && title.toLowerCase().includes(query)) matches.add(title);
     });
-
     const arr = Array.from(matches).slice(0, 15);
     if (arr.length === 0) { dropdown.classList.remove('show'); return; }
-
     arr.forEach(title => {
         const div = document.createElement('div');
         div.className = 'suggestion-item';
@@ -631,38 +533,22 @@ const _handleTitleSearchDebounced = debounce(async (input) => {
             e.preventDefault();
             input.value = title;
             dropdown.classList.remove('show');
-
-            // Бонус: автозаполнение первого автора из базы
             const matchBook = books.find(b => (b['Название'] || b['Title'] || '') === title);
             if (matchBook) {
                 const authorField = matchBook['Автор(ы)'] || matchBook['Автор'] || matchBook['Author'] || '';
                 if (authorField) {
                     const authorInput = document.querySelector('.book-author-input');
-                    if (authorInput && !authorInput.value.trim()) {
-                        authorInput.value = String(authorField).split(',')[0].trim();
-                    }
+                    if (authorInput && !authorInput.value.trim()) authorInput.value = String(authorField).split(',')[0].trim();
                 }
             }
         };
         dropdown.appendChild(div);
     });
-
     dropdown.classList.add('show');
 }, 220);
-
 function handleTitleSearch(input) { _handleTitleSearchDebounced(input); }
 
-// ============================================================
-// УЗОРЫ НА КОРЕШКЕ
-// ============================================================
-
-const PATTERNS = [
-    '✦','✧','★','☆','☽','☾','☼','☄','⚝','⚹',
-    '⛢','♃','♄','♅','♆','♇','⚡','⚗','⚖','⚔',
-    '⚱','⚜','♠','♣','♥','♦','♫','☕','✈','⚓',
-    '☁','☂','☎','✉','✂','✎','☯','☮','☘','✿',
-    '❀','❁','❃','❋','✤','✥','✱','✲','✳','✴'
-];
+const PATTERNS = ['✦','✧','★','☆','☽','☾','☼','☄','⚝','⚹','⛢','♃','♄','♅','♆','♇','⚡','⚗','⚖','⚔','⚱','⚜','♠','♣','♥','♦','♫','☕','✈','⚓','☁','☂','☎','✉','✂','✎','☯','☮','☘','✿','❀','❁','❃','❋','✤','✥','✱','✲','✳','✴'];
 
 function initPatternsGrid() {
     const grid = document.getElementById('patterns-grid');
@@ -675,7 +561,6 @@ function initPatternsGrid() {
         div.onclick = () => {
             const currentValue = document.getElementById('book-pattern').value;
             if (currentValue === p) {
-                // Повторный клик снимает выбор
                 document.getElementById('book-pattern').value = '';
                 div.classList.remove('selected');
             } else {
@@ -688,20 +573,14 @@ function initPatternsGrid() {
     });
 }
 
-// ============================================================
-// «ЧИТАЮ СЕЙЧАС»
-// ============================================================
-
 async function renderReadingNow() {
     const container = document.getElementById('reading-now-container');
     container.innerHTML = '';
     const books = state.library.reading.filter(Boolean);
-
     if (books.length === 0) {
         container.innerHTML = '<p class="text-center" style="font-size:1.2rem; color:#666; margin-top:50px;">Вы сейчас ничего не читаете.</p>';
         return;
     }
-
     books.forEach(book => {
         const slotIndex = state.library.reading.indexOf(book);
         let coverHtml;
@@ -713,7 +592,6 @@ async function renderReadingNow() {
                 <span style="font-family:'Playfair Display',serif; font-size:10px; font-weight:600; color:${textColor}; line-height:1.1; max-height:70%; overflow:hidden;">${escapeHtml(book.title)}</span>
             </div>`;
         }
-
         const card = document.createElement('div');
         card.className = 'reading-now-card';
         card.innerHTML = `
@@ -728,14 +606,8 @@ async function renderReadingNow() {
 }
 
 async function openDetailsFromReadingNow(slotIndex) {
-    if (typeof openDetails === 'function') {
-        await openDetails('reading', slotIndex);
-    }
+    if (typeof openDetails === 'function') await openDetails('reading', slotIndex);
 }
-
-// ============================================================
-// РЕКОМЕНДАЦИИ
-// ============================================================
 
 const RECOMMENDATION_DB = [
     { title: 'Дюна', author: 'Фрэнк Герберт', color: '#c2a06c' },
@@ -751,21 +623,17 @@ const RECOMMENDATION_DB = [
 async function renderRecommendations() {
     const container = document.getElementById('recommendations-container');
     container.innerHTML = '';
-
     const readTitles = new Set();
     state.library.read.forEach(b => { if (b) readTitles.add(b.title.toLowerCase()); });
-    // Также учитываем «брошенные» и «в планах» — их тоже не предлагаем
     state.library.planned.forEach(b => { if (b) readTitles.add(b.title.toLowerCase()); });
     state.library.dropped.forEach(b => { if (b) readTitles.add(b.title.toLowerCase()); });
     state.library.reading.forEach(b => { if (b) readTitles.add(b.title.toLowerCase()); });
 
     const recs = RECOMMENDATION_DB.filter(b => !readTitles.has(b.title.toLowerCase())).slice(0, 5);
-
     if (recs.length === 0) {
         container.innerHTML = '<p class="text-center">Вы прочитали всё, что у нас есть в базе!</p>';
         return;
     }
-
     recs.forEach(rec => {
         const card = document.createElement('div');
         card.className = 'rec-card';
