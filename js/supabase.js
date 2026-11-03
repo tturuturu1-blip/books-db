@@ -34,8 +34,14 @@ async function handleAuth(action) {
             const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
             if (error) throw error;
             await onAuthSuccess(data.session);
-        } else if (action === 'register') {
-            const { data, error } = await supabaseClient.auth.signUp({ email, password });
+} else if (action === 'register') {
+    const { data, error } = await supabaseClient.auth.signUp({ 
+        email, 
+        password,
+        options: {
+            emailRedirectTo: 'https://tturuturu1-blip.github.io/books-db/'
+        }
+    });
             if (error) throw error;
             
             if (data.session) {
