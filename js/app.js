@@ -1,72 +1,139 @@
 // js/app.js
 // ============================================================
+// Глобальный state, инициализация, навигация, темы, цели.
+// Требует: utils.js, supabase.js, db.js, sync.js.
+// ============================================================
 
 const state = {
-    currentPage: 'library', libraryViewMode: 'shelves', isEditingDetails: false,
+    currentPage: 'library',
+    libraryViewMode: 'shelves',
+    isEditingDetails: false,
+    
+    // Кеши (заполняются из БД)
     library: { reading: [], read: [], planned: [], paused: [], dropped: [] },
-    calendar: {}, collections: [], wishlist: [],
-    editContext: { category: null, index: null, bookId: null, isNew: false, isGrid: false, detailTarget: null, moveSource: null, editListTarget: null },
-    progressContext: null, impressionContext: null, quoteContext: null,
-    detailsOrigin: 'library', searchQuery: ''
+    calendar: {},
+    collections: [],
+    wishlist: [],
+    
+    // Контекст редактирования
+    editContext: {
+        category: null,
+        index: null,
+        bookId: null,
+        isNew: false,
+        isGrid: false,
+        detailTarget: null,
+        moveSource: null,
+        editListTarget: null
+    },
+    progressContext: null,
+    impressionContext: null,
+    quoteContext: null,
+    
+    detailsOrigin: 'library',
+    searchQuery: ''
 };
 
 const ICON_EDIT = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>`;
 const ICON_SAVE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>`;
 
-let _authorCache = null, _genreCache = null, _tagCache = null;
+// ==== Кеши для автодополнения ====
+let _authorCache = null;
+let _genreCache = null;
+let _tagCache = null;
+
 function invalidateAuthorCache() { _authorCache = null; }
 function invalidateGenreCache() { _genreCache = null; }
 function invalidateTagsCache() { _tagCache = null; }
 
+// ============================================================
+// СИНХРОНИЗАЦИЯ STATE <- БД
+// ============================================================
 async function syncLibraryFromDb() {
     const library = { reading: [], read: [], planned: [], paused: [], dropped: [] };
-    for (const cab of CABINETS) library[cab] = new Array(TOTAL_SLOTS).fill(null);
+    for (const cab of CABINETS) {
+        library[cab] = new Array(TOTAL_SLOTS).fill(null);
+    }
     const books = await getAllBooks();
     books.forEach(b => {
-        if (library[b.cabinet] && b.slot >= 0 && b.slot < TOTAL_SLOTS) library[b.cabinet][b.slot] = b;
+        if (library[b.cabinet] && b.slot >= 0 && b.slot < TOTAL_SLOTS) {
+            library[b.cabinet][b.slot] = b;
+        }
     });
     state.library = library;
 }
+
 async function syncCalendarFromDb() {
     const entries = await getAllCalendar();
     const map = {};
-    entries.forEach(e => { if (e && e.date && Array.isArray(e.books)) map[e.date] = e.books; });
+    entries.forEach(e => {
+        if (e && e.date && Array.isArray(e.books)) {
+            map[e.date] = e.books;
+        }
+    });
     state.calendar = map;
 }
-async function syncCollectionsFromDb() { state.collections = await getCollections(); }
-async function syncWishlistFromDb() { state.wishlist = await getWishlists(); }
 
-async function syncAllFromDb() {
-    await Promise.all([syncLibraryFromDb(), syncCalendarFromDb(), syncCollectionsFromDb(), syncWishlistFromDb()]);
-    invalidateAuthorCache(); invalidateGenreCache(); invalidateTagsCache();
+async function syncCollectionsFromDb() {
+    state.collections = await getCollections();
 }
 
+async function syncWishlistFromDb() {
+    state.wishlist = await getWishlists();
+}
+
+async function syncAllFromDb() {
+    await Promise.all([
+        syncLibraryFromDb(),
+        syncCalendarFromDb(),
+        syncCollectionsFromDb(),
+        syncWishlistFromDb()
+    ]);
+    invalidateAuthorCache();
+    invalidateGenreCache();
+    invalidateTagsCache();
+}
+
+// ============================================================
+// СИНХРОННЫЕ ГЕТТЕРЫ
+// ============================================================
 function getAllAuthors() {
     if (_authorCache) return _authorCache;
     const authors = new Set();
-    for (const cab of CABINETS) for (const book of state.library[cab]) {
-        if (!book || !book.author) continue;
-        String(book.author).split(',').forEach(a => { const t = a.trim(); if (t) authors.add(t); });
+    for (const cab of CABINETS) {
+        for (const book of state.library[cab]) {
+            if (!book || !book.author) continue;
+            String(book.author).split(',').forEach(a => {
+                const t = a.trim();
+                if (t) authors.add(t);
+            });
+        }
     }
     _authorCache = Array.from(authors).sort((a, b) => a.localeCompare(b, 'ru'));
     return _authorCache;
 }
+
 function getAllGenres() {
     if (_genreCache) return _genreCache;
     const genres = new Set();
-    for (const cab of CABINETS) for (const book of state.library[cab]) {
-        if (!book || !Array.isArray(book.genres)) continue;
-        book.genres.forEach(g => { if (g) genres.add(g); });
+    for (const cab of CABINETS) {
+        for (const book of state.library[cab]) {
+            if (!book || !Array.isArray(book.genres)) continue;
+            book.genres.forEach(g => { if (g) genres.add(g); });
+        }
     }
     _genreCache = Array.from(genres).sort((a, b) => a.localeCompare(b, 'ru'));
     return _genreCache;
 }
+
 function getAllTags() {
     if (_tagCache) return _tagCache;
     const tags = new Set();
-    for (const cab of CABINETS) for (const book of state.library[cab]) {
-        if (!book || !Array.isArray(book.tags)) continue;
-        book.tags.forEach(t => { if (t) tags.add(t); });
+    for (const cab of CABINETS) {
+        for (const book of state.library[cab]) {
+            if (!book || !Array.isArray(book.tags)) continue;
+            book.tags.forEach(t => { if (t) tags.add(t); });
+        }
     }
     _tagCache = Array.from(tags).sort((a, b) => a.localeCompare(b, 'ru'));
     return _tagCache;
@@ -77,7 +144,9 @@ function findBookByTitleLocal(title) {
     for (const cab of CABINETS) {
         const slots = state.library[cab] || [];
         for (let i = 0; i < slots.length; i++) {
-            if (slots[i] && slots[i].title === title) return { book: slots[i], category: cab, index: i };
+            if (slots[i] && slots[i].title === title) {
+                return { book: slots[i], category: cab, index: i };
+            }
         }
     }
     return null;
@@ -88,25 +157,48 @@ function findBookByTitleLocal(title) {
 // ============================================================
 
 async function initAppAfterAuth() {
-    await initDb(); // Инициализация Dexie
-    await syncAllFromDb(); // Загрузка из локальной БД в state
+    try {
+        await initDb(); // Инициализация Dexie и миграций
+    } catch (e) {
+        console.error('Ошибка инициализации БД:', e);
+    }
+
+    try {
+        await syncAllFromDb(); // Загрузка локальных данных в state
+    } catch (e) {
+        console.error('Ошибка загрузки данных:', e);
+        // Если база пуста или произошла ошибка, принудительно создаем 
+        // пустую структуру, чтобы шкафы ВСЕ РАВНО отрисовались
+        const library = { reading: [], read: [], planned: [], paused: [], dropped: [] };
+        for (const cab of CABINETS) library[cab] = new Array(TOTAL_SLOTS).fill(null);
+        state.library = library;
+    }
     
     // Запускаем синхронизацию с облаком (в фоне)
-    if (typeof syncAll === 'function') syncAll();
+    if (typeof syncAll === 'function') {
+        syncAll();
+    }
 
+    // Прогрев XLSX
+    fetchDbBooks().catch(() => {});
+
+    // Инициализация UI-компонентов
     if (typeof initPatternsGrid === 'function') initPatternsGrid();
     if (typeof initStarRating === 'function') initStarRating();
     
-    loadTheme(); // Применяем сохраненную тему
+    // Загрузка сохраненной темы
+    loadTheme();
     
     const shelvesBtn = document.getElementById('view-shelves-btn');
     const gridBtn = document.getElementById('view-grid-btn');
     if (shelvesBtn) shelvesBtn.classList.toggle('active', state.libraryViewMode === 'shelves');
     if (gridBtn) gridBtn.classList.toggle('active', state.libraryViewMode === 'grid');
 
+    // Первый рендер
     await renderLibrary();
     await navigateTo('library');
 
+    // Глобальные слушатели
     document.addEventListener('click', handleGlobalClick);
     window.addEventListener('scroll', handleGlobalScroll, true);
     
@@ -128,11 +220,15 @@ function resetAppState() {
 }
 
 function handleGlobalClick(e) {
-    if (!e.target.closest('.custom-select-wrapper')) closeAllCustomDropdowns();
+    if (!e.target.closest('.custom-select-wrapper')) {
+        closeAllCustomDropdowns();
+    }
     const menu = document.getElementById('context-menu');
     if (menu && !menu.contains(e.target)) menu.classList.remove('show');
+
     const wMenu = document.getElementById('wishlist-context-menu');
     if (wMenu && !wMenu.contains(e.target)) wMenu.classList.remove('show');
+
     document.querySelectorAll('.author-suggestions').forEach(dd => {
         if (!dd.parentElement.contains(e.target)) dd.classList.remove('show');
     });
@@ -152,10 +248,19 @@ function toggleSidebar() {
     document.getElementById('overlay').classList.toggle('active');
 }
 
-const PAGE_INDEX_MAP = { 'library': 0, 'reading-now': 1, 'calendar': 2, 'stats': 3, 'collections': 4, 'wishlist': 5, 'recommendations': 6 };
+const PAGE_INDEX_MAP = {
+    'library': 0,
+    'reading-now': 1,
+    'calendar': 2,
+    'stats': 3,
+    'collections': 4,
+    'wishlist': 5,
+    'recommendations': 6
+};
 
 async function navigateTo(pageId) {
     state.currentPage = pageId;
+
     document.querySelectorAll('.page-content').forEach(el => el.classList.remove('active'));
     const pageEl = document.getElementById('page-' + pageId);
     if (pageEl) pageEl.classList.add('active');
@@ -163,7 +268,9 @@ async function navigateTo(pageId) {
     document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('active'));
     const menuItems = Array.from(document.querySelectorAll('.menu-item'));
     const idx = PAGE_INDEX_MAP[pageId];
-    if (idx !== undefined && menuItems[idx]) menuItems[idx].classList.add('active');
+    if (idx !== undefined && menuItems[idx]) {
+        menuItems[idx].classList.add('active');
+    }
 
     if (document.getElementById('sidebar').classList.contains('open')) toggleSidebar();
     document.getElementById('context-menu').classList.remove('show');
@@ -180,15 +287,19 @@ async function navigateTo(pageId) {
     searchContainer.style.display = (pageId === 'library') ? 'flex' : 'none';
 
     if (pageId === 'library') {
-        viewShelvesBtn.style.display = 'flex'; viewGridBtn.style.display = 'flex';
+        viewShelvesBtn.style.display = 'flex';
+        viewGridBtn.style.display = 'flex';
     } else {
-        viewShelvesBtn.style.display = 'none'; viewGridBtn.style.display = 'none';
+        viewShelvesBtn.style.display = 'none';
+        viewGridBtn.style.display = 'none';
     }
 
     if (pageId === 'details') {
-        topBackBtn.style.display = 'flex'; topActionBtn.style.display = 'flex';
+        topBackBtn.style.display = 'flex';
+        topActionBtn.style.display = 'flex';
     } else {
-        topBackBtn.style.display = 'none'; topActionBtn.style.display = 'none';
+        topBackBtn.style.display = 'none';
+        topActionBtn.style.display = 'none';
     }
 
     if (pageId === 'reading-now' && typeof renderReadingNow === 'function') await renderReadingNow();
@@ -198,25 +309,40 @@ async function navigateTo(pageId) {
     if (pageId === 'wishlist' && typeof renderWishlist === 'function') await renderWishlist();
     if (pageId === 'recommendations' && typeof renderRecommendations === 'function') await renderRecommendations();
 
-    updateUrlHash(pageId);
+    if (typeof updateUrlHash === 'function') updateUrlHash(pageId);
 }
 
 async function goBack() {
-    if (state.currentPage === 'details') await navigateTo(state.detailsOrigin || 'library');
-    else await navigateTo('library');
+    if (state.currentPage === 'details') {
+        await navigateTo(state.detailsOrigin || 'library');
+    } else {
+        await navigateTo('library');
+    }
 }
 
 async function handleDetailsAction() {
     const btn = document.getElementById('top-action-btn');
     if (!btn) return;
+
     if (state.isEditingDetails) {
         if (typeof saveDetails === 'function') await saveDetails();
     } else {
         state.isEditingDetails = true;
         document.getElementById('page-details').classList.add('edit-mode');
-        btn.classList.add('active'); btn.title = 'Сохранить'; btn.innerHTML = ICON_SAVE;
+        btn.classList.add('active');
+        btn.title = 'Сохранить';
+        btn.innerHTML = ICON_SAVE;
         if (typeof refreshDetailsView === 'function') await refreshDetailsView();
     }
+}
+
+async function switchLibraryView(mode) {
+    state.libraryViewMode = mode;
+    const shelvesBtn = document.getElementById('view-shelves-btn');
+    const gridBtn = document.getElementById('view-grid-btn');
+    if (shelvesBtn) shelvesBtn.classList.toggle('active', mode === 'shelves');
+    if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
+    await renderLibrary();
 }
 
 // ============================================================
@@ -260,7 +386,7 @@ function saveGoal() {
     closeGoalModal();
     if (typeof renderStats === 'function') renderStats();
     if (typeof syncSettings === 'function' && currentUser) syncSettings(currentUser.id);
-    showToast('Цель обновлена', 'success');
+    if (typeof showToast === 'function') showToast('Цель обновлена', 'success');
 }
 
 // ============================================================
@@ -268,7 +394,7 @@ function saveGoal() {
 // ============================================================
 const _handleSearchDebounced = debounce((query) => {
     state.searchQuery = query.toLowerCase().trim();
-    renderLibrary(); // Перерисовываем библиотеку с учетом фильтра
+    if (typeof renderLibrary === 'function') renderLibrary();
 }, 300);
 
 function handleLibrarySearch(query) { _handleSearchDebounced(query); }
@@ -282,36 +408,53 @@ async function exportData() {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = `library_backup_${new Date().toISOString().slice(0, 10)}.json`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        a.href = url;
+        a.download = `library_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (err) { showToast('Ошибка экспорта', 'error'); }
+    } catch (err) {
+        if (typeof showToast === 'function') showToast('Ошибка экспорта: ' + err.message, 'error');
+    }
 }
 
 async function importData(event) {
     const file = event.target.files[0];
     if (!file) return;
+
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
             const data = JSON.parse(e.target.result);
-            if (!await showConfirm('Импорт', 'Импорт заменит текущую библиотеку. Продолжить?')) return;
+            const confirmMsg = 'Импорт полностью заменит текущую библиотеку. Продолжить?';
+            const isConfirmed = typeof showConfirm === 'function' ? await showConfirm('Импорт', confirmMsg) : confirm(confirmMsg);
+            
+            if (!isConfirmed) return;
+
             await replaceAllData(data);
             await syncAllFromDb();
             await renderLibrary();
             await navigateTo(state.currentPage || 'library');
-            if (typeof syncAll === 'function') syncAll(); // Отправляем в облако
-            showToast('Импорт завершён', 'success');
-        } catch (err) { showToast('Ошибка импорта: ' + err.message, 'error'); }
+            
+            if (typeof syncAll === 'function') syncAll(); // Отправляем новые данные в облако
+            if (typeof showToast === 'function') showToast('Импорт завершён', 'success');
+        } catch (err) {
+            if (typeof showToast === 'function') showToast('Ошибка импорта: ' + err.message, 'error');
+        }
     };
     reader.readAsText(file);
     event.target.value = '';
 }
 
-// Запуск проверки сессии при загрузке
+// ============================================================
+// ЗАПУСК
+// ============================================================
 window.addEventListener('load', async () => {
-    // Ждём загрузки supabase.js
+    // Ждём загрузки supabase.js и проверяем активную сессию
     setTimeout(async () => {
-        if (typeof checkSession === 'function') await checkSession();
+        if (typeof checkSession === 'function') {
+            await checkSession();
+        }
     }, 100);
 });
