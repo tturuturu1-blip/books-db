@@ -4,7 +4,7 @@
 // ============================================================
 
 // ⚠️ ВСТАВЬТЕ СЮДА ВАШИ ДАННЫЕ ИЗ SUPABASE (Project Settings -> API)
-const SUPABASE_URL = 'https://qkllomoiarqatvwhipnm.supabase.co/rest/v1/';
+const SUPABASE_URL = 'https://qkllomoiarqatvwhipnm.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_QLHITkR1hP2627h-UreptA_JjNQCkeO';
 
 // Инициализация клиента (переменная называется supabaseClient, чтобы не конфликтовать с глобальным объектом)
