@@ -14,7 +14,7 @@ async function renderLibrary() {
         document.getElementById('grid-view-container').classList.add('active');
         renderGridView();
     } else {
-        document.getElementById('cabinets-container').style.display = 'flex'; // Важно для карусели
+        document.getElementById('cabinets-container').style.display = 'flex';
         document.getElementById('grid-view-container').classList.remove('active');
         renderShelvesView();
     }
@@ -36,7 +36,6 @@ function renderShelvesView() {
             const labelDiv = document.createElement('div');
             labelDiv.className = 'cabinet-label';
             
-            // Нумерация шкафов
             if (subCabinetsCount > 1) {
                 labelDiv.textContent = `${CABINET_LABELS[cab]} ${c + 1}/${subCabinetsCount}`;
             } else {
@@ -56,8 +55,6 @@ function renderShelvesView() {
                     const heightClass = globalSlot % 4 === 0 ? 'h-tall' : (globalSlot % 3 === 0 ? 'h-short' : '');
                     
                     let book = state.library[cab][globalSlot];
-                    
-                    // Фильтрация поиска
                     if (query && book) {
                         const match = (book.title && book.title.toLowerCase().includes(query)) || 
                                       (book.author && book.author.toLowerCase().includes(query));
@@ -103,7 +100,6 @@ function renderShelvesView() {
             clearTimeout(scrollTimeout);
             
             scrollTimeout = setTimeout(() => {
-                // Используем scrollWidth для точного определения краев
                 const maxScroll = container.scrollWidth - container.clientWidth;
                 const currentScroll = container.scrollLeft;
                 
@@ -113,12 +109,9 @@ function renderShelvesView() {
 
                 let targetScroll = null;
 
-                // Если долистали до конца (правые клоны)
                 if (currentScroll >= maxScroll - 30) {
                     targetScroll = currentScroll - originalWidth;
-                } 
-                // Если долистали до начала (левые клоны)
-                else if (currentScroll <= 30) {
+                } else if (currentScroll <= 30) {
                     targetScroll = currentScroll + originalWidth;
                 }
 
@@ -137,6 +130,43 @@ function renderShelvesView() {
             }, 150); 
         };
     }
+
+    // --- ДЕЛЕГИРОВАНИЕ СОБЫТИЙ (РАБОТАЕТ ДЛЯ КЛОНОВ) ---
+    // Вместо назначения onclick на каждую книгу, мы ловим клик на контейнере.
+    container.onclick = (e) => {
+        const bookDiv = e.target.closest('.book');
+        if (!bookDiv) return;
+        e.stopPropagation();
+        
+        const cab = bookDiv.dataset.cabinet;
+        const slot = parseInt(bookDiv.dataset.slot);
+        const isEmpty = bookDiv.classList.contains('empty');
+        
+        if (isEmpty) {
+            openBookModal(cab, slot, true, false);
+        } else {
+            openContextMenu(e, cab, slot);
+        }
+    };
+
+    container.addEventListener('dragstart', (e) => {
+        const bookDiv = e.target.closest('.book');
+        if (!bookDiv || bookDiv.classList.contains('empty')) return;
+        draggedItem = { cabinet: bookDiv.dataset.cabinet, slot: parseInt(bookDiv.dataset.slot) };
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', '');
+    });
+
+    container.addEventListener('dragover', (e) => {
+        if (e.target.closest('.book')) e.preventDefault();
+    });
+
+    container.addEventListener('drop', (e) => {
+        const bookDiv = e.target.closest('.book');
+        if (!bookDiv) return;
+        e.preventDefault();
+        handleDrop(e, bookDiv.dataset.cabinet, parseInt(bookDiv.dataset.slot));
+    });
 }
 
 function createBookElement(cabinet, slot, heightClass, bookData) {
@@ -150,16 +180,13 @@ function createBookElement(cabinet, slot, heightClass, bookData) {
     }
 
     bookDiv.className = `book ${heightClass} ${dynamicWidthClass}`;
+    
+    // Добавляем data-атрибуты для делегирования событий
+    bookDiv.dataset.cabinet = cabinet;
+    bookDiv.dataset.slot = slot;
 
     if (book) {
         bookDiv.draggable = true;
-        bookDiv.addEventListener('dragstart', (e) => {
-            draggedItem = { cabinet, slot };
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', '');
-        });
-        bookDiv.addEventListener('dragover', (e) => e.preventDefault());
-        bookDiv.addEventListener('drop', (e) => handleDrop(e, cabinet, slot));
         bookDiv.classList.add('filled');
 
         if (book.spineImage) {
@@ -197,12 +224,8 @@ function createBookElement(cabinet, slot, heightClass, bookData) {
             bookDiv.appendChild(contentDiv);
         }
         bookDiv.title = `${book.title || ''} — ${book.author || ''}`;
-        bookDiv.onclick = (e) => { e.stopPropagation(); openContextMenu(e, cabinet, slot); };
     } else {
         bookDiv.classList.add('empty');
-        bookDiv.onclick = () => openBookModal(cabinet, slot, true, false);
-        bookDiv.addEventListener('dragover', (e) => e.preventDefault());
-        bookDiv.addEventListener('drop', (e) => handleDrop(e, cabinet, slot));
     }
     return bookDiv;
 }
@@ -270,7 +293,6 @@ function renderGridView() {
 }
 
 async function handleDrop(e, targetCabinet, targetSlot) {
-    e.preventDefault();
     if (!draggedItem) return;
     const src = draggedItem;
     draggedItem = null;
@@ -299,7 +321,6 @@ async function handleDrop(e, targetCabinet, targetSlot) {
 }
 
 function openContextMenu(e, cabinet, slot) {
-    e.stopPropagation();
     state.editContext = { ...state.editContext, category: cabinet, index: slot, bookId: state.library[cabinet][slot]?.id || null };
     const menu = document.getElementById('context-menu');
     let x = e.clientX, y = e.clientY;
