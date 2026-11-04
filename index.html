@@ -7,12 +7,10 @@
     <meta name="format-detection" content="telephone=no">
     <title>КниБум</title>
 
-    <!-- PWA Манифест -->
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="assets/avatar.png">
     <link rel="icon" type="image/png" href="assets/avatar.png">
 
-    <!-- Preload ключевых шрифтов -->
     <link rel="preload" href="fonts/playfair-display-v40-cyrillic_latin-regular.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/playfair-display-v40-cyrillic_latin-600.woff2" as="font" type="font/woff2" crossorigin>
 
@@ -59,7 +57,6 @@
                 <span>Меню</span>
             </div>
 
-            <!-- Блок профиля пользователя -->
             <div class="sidebar-profile">
                 <div class="profile-avatar">
                     <img src="assets/avatar.png" alt="Аватар">
@@ -87,12 +84,12 @@
         <!-- Основная область -->
         <div id="app-container">
             <div class="top-bar">
-                <!-- Поиск слева -->
+                <!-- Поиск слева (растягивается) -->
                 <div class="search-container" id="search-container" style="margin-left: 0;">
                     <input type="text" id="search-input" placeholder="Поиск книг..." oninput="handleLibrarySearch(this.value)">
                 </div>
 
-                <!-- Кнопка обновления данных из облака -->
+                <!-- Кнопки справа -->
                 <button class="icon-btn" id="refresh-btn" onclick="manualSync()" title="Обновить данные">
                     <svg viewBox="0 0 24 24">
                         <path d="M23 4v6h-6"></path>
@@ -101,44 +98,43 @@
                     </svg>
                 </button>
 
-                <!-- Переключатели вида -->
-                <button class="icon-btn active" id="view-shelves-btn" onclick="switchLibraryView('shelves')" title="Книжные полки">
-                    <svg viewBox="0 0 24 24">
-                        <line x1="3" y1="20" x2="21" y2="20"></line>
-                        <rect x="5" y="8" width="3" height="12" rx="1"></rect>
-                        <rect x="10.5" y="4" width="3" height="16" rx="1"></rect>
-                        <rect x="16" y="11" width="3" height="9" rx="1"></rect>
-                    </svg>
-                </button>
-                <button class="icon-btn" id="view-grid-btn" onclick="switchLibraryView('grid')" title="Плитка">
-                    <svg viewBox="0 0 24 24">
-                        <rect x="3" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="3" width="7" height="7"></rect>
-                        <rect x="14" y="14" width="7" height="7"></rect>
-                        <rect x="3" y="14" width="7" height="7"></rect>
-                    </svg>
-                </button>
-
                 <button class="icon-btn" id="top-action-btn" onclick="handleDetailsAction()" title="Редактировать" style="display: none;"></button>
                 
-                <button class="icon-btn" id="top-back-btn" onclick="goBack()" title="Назад">
+                <button class="icon-btn" id="top-back-btn" onclick="goBack()" title="Назад" style="display: none;">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <line x1="19" y1="12" x2="5" y2="12"></line>
                         <polyline points="12 19 5 12 12 5"></polyline>
                     </svg>
                 </button>
 
-                <!-- Кнопка меню справа -->
                 <button class="icon-btn" onclick="toggleSidebar()" aria-label="Меню">
                     <div class="menu-icon-lines"><span></span><span></span><span></span></div>
                 </button>
             </div>
 
             <!-- ==================== Библиотека ==================== -->
-            <div id="page-library" class="page-content active">
-                <div class="top-icons">
-                    ✦ ✧ <span style="font-size: 1.5em; vertical-align: middle; line-height: 0.5;">☾</span> ✧ ✦
+            <div id="page-library" class="page-content active" style="position: relative;">
+                
+                <!-- Кнопки переключения вида (теперь в правом верхнем углу страницы) -->
+                <div class="view-toggles-container">
+                    <button class="icon-btn active" id="view-shelves-btn" onclick="switchLibraryView('shelves')" title="Книжные полки">
+                        <svg viewBox="0 0 24 24">
+                            <line x1="3" y1="20" x2="21" y2="20"></line>
+                            <rect x="5" y="8" width="3" height="12" rx="1"></rect>
+                            <rect x="10.5" y="4" width="3" height="16" rx="1"></rect>
+                            <rect x="16" y="11" width="3" height="9" rx="1"></rect>
+                        </svg>
+                    </button>
+                    <button class="icon-btn" id="view-grid-btn" onclick="switchLibraryView('grid')" title="Плитка">
+                        <svg viewBox="0 0 24 24">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                        </svg>
+                    </button>
                 </div>
+
                 <h1 class="page-title">Моя библиотека</h1>
                 <div class="cabinets-grid" id="cabinets-container"></div>
                 <div class="grid-view-container" id="grid-view-container"></div>
