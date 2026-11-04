@@ -1196,3 +1196,14 @@ body.dark-theme .collection-header, body.dark-theme .wishlist-header { border-co
     /* На мобильных прячем поиск, чтобы поместились кнопки, или оставляем, но делаем меньше */
     .search-container { margin: 0; }
 }
+
+/* Стили для картинки внутри аватарки профиля */
+.profile-avatar {
+    overflow: hidden; /* Обрезаем всё лишнее */
+}
+
+.profile-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Картинка заполнит весь круг без искажений */
+}
