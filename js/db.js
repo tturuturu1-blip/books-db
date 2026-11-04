@@ -6,9 +6,11 @@
 
 const CABINETS = ['reading', 'read', 'planned', 'paused', 'dropped'];
 const CABINET_LABELS = { reading: 'Читаю', read: 'Прочитано', planned: 'В планах', paused: 'На паузе', dropped: 'Брошено' };
-const SHELVES_PER_CABINET = 6;
+
+// ИЗМЕНЕНО: теперь по 4 полки в шкафу
+const SHELVES_PER_CABINET = 4; 
 const SLOTS_PER_SHELF = 7;
-const TOTAL_SLOTS = SHELVES_PER_CABINET * SLOTS_PER_SHELF; // 42
+const TOTAL_SLOTS = SHELVES_PER_CABINET * SLOTS_PER_SHELF; // 28 слотов в одном шкафу
 
 const LEGACY_STORAGE_KEY = 'readingDiaryData_v7';
 const MIGRATION_KEY = 'migrated_v1';
@@ -32,7 +34,7 @@ db.version(2).stores({
     wishlists: 'id, name, updatedAt',
     meta: 'key'
 }).upgrade(async tx => {
-    // Конвертируем старые числовые ID в строковые UUID
+    // Конвертируем старые числовые ID в строковые UUID при обновлении
     const fixTable = async (tableName) => {
         const items = await tx.table(tableName).toArray();
         for (let item of items) {
@@ -50,6 +52,9 @@ db.version(2).stores({
     await fixTable('wishlists');
 });
 
+// ============================================================
+// МИГРАЦИЯ ИЗ localStorage
+// ============================================================
 async function migrateFromLocalStorage() {
     const flag = await db.meta.get(MIGRATION_KEY);
     if (flag && flag.value) return;
@@ -298,7 +303,7 @@ async function replaceAllData(data) {
 }
 
 // ============================================================
-// ИНИЦИАЛИЗАЦИЯ
+// ИНИЦИАЛИЗАЦИЯ (с защитой от ошибки UpgradeError)
 // ============================================================
 async function initDb() {
     try {
