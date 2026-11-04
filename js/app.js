@@ -221,7 +221,7 @@ async function initAppAfterAuth() {
     document.addEventListener('click', handleGlobalClick);
     window.addEventListener('scroll', handleGlobalScroll, true);
     
-    // Автосинхронизация при возврате на вкладку (без скачивания из облака, только локальный кеш)
+    // Автосинхронизация при возврате на вкладку (только чтение из локальной БД)
     document.addEventListener('visibilitychange', async () => {
         if (!document.hidden) {
             await syncAllFromDb();
@@ -366,19 +366,20 @@ async function manualSync() {
     btn.disabled = true;
     btn.style.opacity = '0.5';
     
-    if (typeof showToast === 'function') showToast('Обновление данных из облака...', 'info');
+    if (typeof showToast === 'function') showToast('Синхронизация...', 'info');
 
     try {
-        // 1. Синхронизируем с облаком (скачиваем и отправляем)
+        // 1. Ждём полного завершения синхронизации (скачивание + отправка)
         if (typeof syncAll === 'function') {
             await syncAll();
         }
         
-        // 2. Обновляем кеш state из локальной БД
+        // 2. Обновляем локальные данные из IndexedDB
         await syncAllFromDb();
         
         // 3. Перерисовываем текущую страницу
         await renderLibrary();
+        
         if (state.currentPage === 'stats' && typeof renderStats === 'function') await renderStats();
         if (state.currentPage === 'calendar' && typeof renderCalendar === 'function') await renderCalendar();
         if (state.currentPage === 'wishlist' && typeof renderWishlist === 'function') await renderWishlist();
@@ -387,7 +388,7 @@ async function manualSync() {
         if (typeof showToast === 'function') showToast('Данные обновлены', 'success');
     } catch (err) {
         console.error('Ошибка синхронизации:', err);
-        if (typeof showToast === 'function') showToast('Ошибка обновления: ' + err.message, 'error');
+        if (typeof showToast === 'function') showToast('Ошибка: ' + err.message, 'error');
     } finally {
         btn.disabled = false;
         btn.style.opacity = '1';
