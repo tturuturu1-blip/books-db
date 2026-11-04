@@ -4,24 +4,23 @@
 // ============================================================
 
 let isSyncing = false;
-let lastSyncTime = 0;
 
-// Помощники для конвертации названий полей (camelCase в JS <-> snake_case в SQL)
+// Конвертация локальной книги в формат базы данных Supabase
 function toDbBook(b, userId) {
     return {
         id: b.id,
         user_id: userId,
-        cabinet: b.cabinet,
-        slot: b.slot,
-        title: b.title,
-        author: b.author,
-        color: b.color,
-        pattern: b.pattern,
-        cover: b.cover,
-        spine_image: b.spineImage,
+        cabinet: b.cabinet || 'reading',
+        slot: b.slot || 0,
+        title: b.title || 'Без названия',
+        author: b.author || 'Неизвестен',
+        color: b.color || '#fcfaf5',
+        pattern: b.pattern || '',
+        cover: b.cover || '',
+        spine_image: b.spineImage || '',
         rating: b.rating || 0,
-        genres: b.genres || [],
-        tags: b.tags || [],
+        genres: Array.isArray(b.genres) ? b.genres : (b.genres ? String(b.genres).split(',').map(g => g.trim()) : []),
+        tags: Array.isArray(b.tags) ? b.tags : (b.tags ? String(b.tags).split(',').map(t => t.trim()) : []),
         series: b.series || '',
         subseries: b.subseries || '',
         volume: b.volume || 0,
@@ -44,6 +43,7 @@ function toDbBook(b, userId) {
     };
 }
 
+// Конвертация книги из базы данных Supabase в локальный формат
 function fromDbBook(r) {
     return {
         id: r.id,
@@ -56,8 +56,8 @@ function fromDbBook(r) {
         cover: r.cover,
         spineImage: r.spine_image,
         rating: r.rating,
-        genres: r.genres,
-        tags: r.tags,
+        genres: r.genres || [],
+        tags: r.tags || [],
         series: r.series,
         subseries: r.subseries,
         volume: r.volume,
@@ -70,186 +70,181 @@ function fromDbBook(r) {
         summary: r.summary,
         timeline: r.timeline,
         worldMap: r.world_map,
-        impressions: r.impressions,
-        quotes: r.quotes,
-        characters: r.characters,
-        terms: r.terms,
-        dailyProgress: r.daily_progress,
-        createdAt: new Date(r.created_at).getTime(),
-        updatedAt: new Date(r.updated_at).getTime()
+        impressions: r.impressions || [],
+        quotes: r.quotes || [],
+        characters: r.characters || [],
+        terms: r.terms || [],
+        dailyProgress: r.daily_progress || {},
+        createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
+        updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : Date.now()
     };
 }
 
 // ============================================================
-// ОСНОВНАЯ ФУНКЦИЯ СИНХРОНИЗАЦИИ
+// ГЛАВНАЯ ФУНКЦИЯ СИНХРОНИЗАЦИИ
 // ============================================================
-
 async function syncAll() {
     if (!currentUser || !navigator.onLine || isSyncing) return;
     
     isSyncing = true;
-    console.log('🔄 Начинаем синхронизацию с облаком...');
+    console.log('🔄 НАЧАЛО СИНХРОНИЗАЦИИ...');
     
     try {
         const userId = currentUser.id;
         
-        // 1. Синхронизация Книг (самое важное, делаем первым, без catch)
+        // 1. Синхронизация книг
         await syncBooks(userId);
         
-        // Остальные таблицы синхронизируем с защитой от падения (catch),
-        // чтобы ошибка в одной не прервала весь процесс.
-        await syncCalendar(userId).catch(e => console.warn('⚠️ Ошибка синхр. календаря:', e.message));
-        await syncCollections(userId).catch(e => console.warn('⚠️ Ошибка синхр. коллекций:', e.message));
-        await syncWishlists(userId).catch(e => console.warn('⚠️ Ошибка синхр. вишлиста:', e.message));
-        await syncSettings(userId).catch(e => console.warn('⚠️ Ошибка синхр. настроек:', e.message));
+        // 2. Синхронизация календаря (оборачиваем в try/catch, чтобы не сломать книги)
+        try { await syncCalendar(userId); } catch(e) { console.error('Ошибка календаря:', e); }
         
-        lastSyncTime = Date.now();
-        console.log('✅ Синхронизация завершена');
+        // 3. Синхронизация коллекций
+        try { await syncCollections(userId); } catch(e) { console.error('Ошибка коллекций:', e); }
         
-        // Обновляем локальный кеш state (вызывается из app.js)
-        if (typeof syncAllFromDb === 'function') {
-            await syncAllFromDb();
-        }
+        // 4. Синхронизация желаний
+        try { await syncWishlists(userId); } catch(e) { console.error('Ошибка вишлиста:', e); }
         
+        // 5. Синхронизация настроек
+        try { await syncSettings(userId); } catch(e) { console.error('Ошибка настроек:', e); }
+        
+        console.log('✅ СИНХРОНИЗАЦИЯ УСПЕШНО ЗАВЕРШЕНА');
     } catch (err) {
-        console.error('❌ Критическая ошибка синхронизации книг:', err);
+        console.error('❌ КРИТИЧЕСКАЯ ОШИБКА СИНХРОНИЗАЦИИ:', err);
     } finally {
         isSyncing = false;
     }
 }
 
 // ============================================================
-// СИНХРОНИЗАЦИЯ КНИГ
+// СИНХРОНИЗАЦИЯ КНИГ (Пошаговое слияние)
 // ============================================================
 async function syncBooks(userId) {
-    // --- ШАГ 1: Скачиваем из облака (Pull) ---
-    const { data: remoteData, error: pullError } = await supabaseClient
+    console.log('📚 Синхронизация книг...');
+    
+    // 1. Получаем данные из облака
+    const { data: remoteBooks, error: pullError } = await supabaseClient
         .from('books')
         .select('*')
         .eq('user_id', userId);
         
     if (pullError) throw pullError;
-    
-    const localData = await db.books.toArray();
-    const localMap = new Map(localData.map(b => [b.id, b]));
-    
-    for (const rItem of remoteData) {
-        const localItem = localMap.get(rItem.id);
-        const remoteUpdatedAt = rItem.updated_at ? new Date(rItem.updated_at).getTime() : 0;
-        
-        // Если локальной книги нет, или версия в облаке новее — перезаписываем локальную
-        if (!localItem || remoteUpdatedAt > localItem.updatedAt) {
-            await db.books.put(fromDbBook(rItem));
+    console.log(`⬇️ Из облака получено книг: ${remoteBooks.length}`);
+
+    // 2. Получаем данные с устройства
+    const localBooks = await db.books.toArray();
+    const localMap = new Map(localBooks.map(b => [b.id, b]));
+    console.log(`📱 На устройстве книг: ${localBooks.length}`);
+
+    // 3. Слияние (Облако -> Устройство)
+    // Если книга есть в облаке, но её нет на устройстве (или облачная версия новее), скачиваем её
+    for (const rBook of remoteBooks) {
+        const lBook = localMap.get(rBook.id);
+        const remoteTime = rBook.updated_at ? new Date(rBook.updated_at).getTime() : 0;
+        const localTime = lBook ? lBook.updatedAt : 0;
+
+        if (!lBook || remoteTime > localTime) {
+            console.log(`  + Скачиваем книгу из облака: ${rBook.title}`);
+            await db.books.put(fromDbBook(rBook));
         }
     }
-    
-    // --- ШАГ 2: Отправляем в облако (Push) ---
-    const updatedLocalData = await db.books.toArray();
-    if (updatedLocalData.length > 0) {
-        const toUpload = updatedLocalData.map(b => toDbBook(b, userId));
-        
-        // Разбиваем на чанки по 50 штук, чтобы не превысить лимиты запроса
-        for (let i = 0; i < toUpload.length; i += 50) {
-            const chunk = toUpload.slice(i, i + 50);
-            const { error: pushError } = await supabaseClient
-                .from('books')
-                .upsert(chunk);
-                
+
+    // 4. Слияние (Устройство -> Облако)
+    // Если книга есть на устройстве, но её нет в облаке (или локальная версия новее), отправляем её
+    const updatedLocalBooks = await db.books.toArray();
+    const booksToUpload = [];
+
+    for (const lBook of updatedLocalBooks) {
+        const rBook = remoteBooks.find(r => r.id === lBook.id);
+        const remoteTime = rBook && rBook.updated_at ? new Date(rBook.updated_at).getTime() : 0;
+        const localTime = lBook.updatedAt || 0;
+
+        if (!rBook || localTime > remoteTime) {
+            console.log(`  ⬆️ Отправляем книгу в облако: ${lBook.title}`);
+            booksToUpload.push(toDbBook(lBook, userId));
+        }
+    }
+
+    // 5. Отправка накопленных данных в облако
+    if (booksToUpload.length > 0) {
+        // Отправляем частями по 50 штук, чтобы не превысить лимиты
+        for (let i = 0; i < booksToUpload.length; i += 50) {
+            const chunk = booksToUpload.slice(i, i + 50);
+            const { error: pushError } = await supabaseClient.from('books').upsert(chunk);
             if (pushError) throw pushError;
         }
+        console.log(`✅ В облако отправлено книг: ${booksToUpload.length}`);
+    } else {
+        console.log(`ℹ️ Новых книг для отправки нет.`);
     }
 }
 
 // ============================================================
-// СИНХРОНИЗАЦИЯ КАЛЕНДАРЯ
+// ОСТАЛЬНЫЕ СИНХРОНИЗАЦИИ (Календарь, Коллекции, Вишлист)
 // ============================================================
 async function syncCalendar(userId) {
     const { data: remote, error } = await supabaseClient.from('calendar').select('*').eq('user_id', userId);
     if (error) throw error;
 
-    const local = await db.calendar.toArray();
-    const localMap = new Map(local.map(c => [c.date, c]));
-
-    // Скачиваем (Pull)
     for (const r of remote) {
-        const l = localMap.get(r.date);
-        if (!l) {
-            await db.calendar.put({ date: r.date, books: r.books });
-        }
+        await db.calendar.put({ date: r.date, books: r.books });
     }
 
-    // Отправляем (Push)
-    const updatedLocal = await db.calendar.toArray();
-    if (updatedLocal.length > 0) {
-        const toUpload = updatedLocal.map(c => ({ date: c.date, user_id: userId, books: c.books }));
+    const local = await db.calendar.toArray();
+    if (local.length > 0) {
+        const toUpload = local.map(c => ({ date: c.date, user_id: userId, books: c.books }));
         await supabaseClient.from('calendar').upsert(toUpload);
     }
 }
 
-// ============================================================
-// СИНХРОНИЗАЦИЯ КОЛЛЕКЦИЙ
-// ============================================================
 async function syncCollections(userId) {
     const { data: remote, error } = await supabaseClient.from('collections').select('*').eq('user_id', userId);
     if (error) throw error;
 
     const local = await db.collections.toArray();
-    
-    // Скачиваем (Pull)
+    const localMap = new Map(local.map(c => [c.id, c]));
+
     for (const r of remote) {
         await db.collections.put({ id: r.id, name: r.name, books: r.books, updatedAt: Date.now() });
     }
 
-    // Отправляем (Push)
-    const updatedLocal = await db.collections.toArray();
-    if (updatedLocal.length > 0) {
-        const toUpload = updatedLocal.map(c => ({ id: c.id, user_id: userId, name: c.name, books: c.books }));
+    const toUpload = [];
+    for (const l of local) {
+        const r = remote.find(x => x.id === l.id);
+        if (!r || l.updatedAt > (r.updated_at || 0)) {
+            toUpload.push({ id: l.id, user_id: userId, name: l.name, books: l.books });
+        }
+    }
+
+    if (toUpload.length > 0) {
         await supabaseClient.from('collections').upsert(toUpload);
     }
 }
 
-// ============================================================
-// СИНХРОНИЗАЦИЯ WISHLIST
-// ============================================================
 async function syncWishlists(userId) {
     const { data: remote, error } = await supabaseClient.from('wishlists').select('*').eq('user_id', userId);
     if (error) throw error;
 
-    const local = await db.wishlists.toArray();
-    
-    // Скачиваем (Pull)
     for (const r of remote) {
         await db.wishlists.put({ id: r.id, name: r.name, books: r.books, completed: r.completed, updatedAt: Date.now() });
     }
 
-    // Отправляем (Push)
-    const updatedLocal = await db.wishlists.toArray();
-    if (updatedLocal.length > 0) {
-        const toUpload = updatedLocal.map(c => ({ id: c.id, user_id: userId, name: c.name, books: c.books, completed: c.completed }));
+    const local = await db.wishlists.toArray();
+    const toUpload = local.map(l => ({ id: l.id, user_id: userId, name: l.name, books: l.books, completed: l.completed }));
+    
+    if (toUpload.length > 0) {
         await supabaseClient.from('wishlists').upsert(toUpload);
     }
 }
 
-// ============================================================
-// СИНХРОНИЗАЦИЯ НАСТРОЕК (Цель, Тема)
-// ============================================================
 async function syncSettings(userId) {
     const { data: remote, error } = await supabaseClient.from('user_settings').select('*').eq('user_id', userId).single();
-    
-    // Игнорируем ошибку "строка не найдена" (PGRST116)
-    if (error && error.code !== 'PGRST116') console.warn('Ошибка синхронизации настроек:', error);
+    if (error && error.code !== 'PGRST116') console.warn('Ошибка настроек:', error);
 
     if (remote) {
-        // Если в облаке есть данные, применяем их
-        if (remote.goal_books !== undefined && remote.goal_books !== null) {
-            localStorage.setItem('readingGoal', remote.goal_books);
-        }
-        if (remote.theme) {
-            localStorage.setItem('theme', remote.theme);
-        }
+        if (remote.goal_books) localStorage.setItem('readingGoal', remote.goal_books);
+        if (remote.theme) localStorage.setItem('theme', remote.theme);
     }
 
-    // Отправляем локальные настройки в облако
     const goal = parseInt(localStorage.getItem('readingGoal')) || 0;
     const theme = localStorage.getItem('theme') || 'light';
     
@@ -260,11 +255,8 @@ async function syncSettings(userId) {
     });
 }
 
-// ============================================================
-// АВТОМАТИЧЕСКАЯ СИНХРОНИЗАЦИЯ
-// ============================================================
-// Если интернет пропал и появился снова — запускаем синк
+// Автоматическая синхронизация при восстановлении интернета
 window.addEventListener('online', () => {
-    console.log('🌐 Соединение восстановлено, запускаем фоновую синхронизацию...');
+    console.log('🌐 Интернет восстановлен. Запуск синхронизации...');
     if (typeof syncAll === 'function') syncAll();
 });
