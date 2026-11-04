@@ -53,8 +53,8 @@ async function syncLibraryFromDb() {
     const library = { reading: [], read: [], planned: [], paused: [], dropped: [] };
     const books = await getAllBooks();
     
-    // Находим максимальный индекс ячейки для каждого шкафа
-    const maxSlots = { reading: 0, read: 0, planned: 0, paused: 0, dropped: 0 };
+    // Находим максимальный индекс ячейки для каждого шкафа (-1, если книг нет)
+    const maxSlots = { reading: -1, read: -1, planned: -1, paused: -1, dropped: -1 };
     books.forEach(b => {
         if (maxSlots[b.cabinet] !== undefined && b.slot >= 0) {
             if (b.slot > maxSlots[b.cabinet]) maxSlots[b.cabinet] = b.slot;
@@ -66,13 +66,13 @@ async function syncLibraryFromDb() {
         let slotsNeeded = Math.ceil((maxSlots[cab] + 1) / TOTAL_SLOTS) * TOTAL_SLOTS;
         if (slotsNeeded === 0) slotsNeeded = TOTAL_SLOTS;
 
-        // Если последний шкаф заполнен ровно под завязку, добавляем еще один пустой
+        // Если последний шкаф заполнен ровно под завязку, добавляем следующий
         if (maxSlots[cab] + 1 >= slotsNeeded) {
             slotsNeeded += TOTAL_SLOTS;
         }
         
-        // Добавляем один запасной шкаф, чтобы всегда было куда нажать "+"
-        slotsNeeded += TOTAL_SLOTS;
+        // ВАЖНО: Убрано принудительное добавление запасного шкафа.
+        // Теперь новый шкаф появится только когда заполнится текущий.
 
         library[cab] = new Array(slotsNeeded).fill(null);
     }
