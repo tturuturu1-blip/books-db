@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
     <meta name="theme-color" content="#d2cbc0">
     <meta name="format-detection" content="telephone=no">
-    <title>КниБунт</title>
+    <title>КниБум</title>
 
     <!-- PWA Манифест -->
     <link rel="manifest" href="manifest.json">
@@ -25,8 +25,8 @@
     <!-- ==================== ЭКРАН АВТОРИЗАЦИИ ==================== -->
     <div id="auth-screen" style="display: flex;">
         <div class="auth-card">
-            <img src="assets/icon.png" alt="КниБунт" class="auth-logo">
-            <h1 class="auth-title">Книжный бунт</h1>
+            <img src="assets/icon.png" alt="КниБум" class="auth-logo">
+            <h1 class="auth-title">Книжный бум</h1>
             <p class="auth-subtitle">Твой волшебный читательский дневник</p>
             
             <div class="form-group" style="text-align: left;">
@@ -58,6 +58,18 @@
                 <span>Меню</span>
                 <button class="close-sidebar-btn" onclick="toggleSidebar()" aria-label="Закрыть меню">✕</button>
             </div>
+
+            <!-- Блок профиля пользователя -->
+            <div class="sidebar-profile">
+                <div class="profile-avatar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </div>
+                <div class="profile-email" id="sidebar-user-email">Загрузка...</div>
+            </div>
+
             <ul class="menu-list">
                 <li class="menu-item active" onclick="navigateTo('library')">Моя библиотека</li>
                 <li class="menu-item" onclick="navigateTo('reading-now')">Читаю сейчас</li>
