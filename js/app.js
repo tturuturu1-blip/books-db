@@ -297,14 +297,6 @@ async function navigateTo(pageId) {
 
     searchContainer.style.display = (pageId === 'library') ? 'flex' : 'none';
 
-    if (pageId === 'library') {
-        viewShelvesBtn.style.display = 'flex';
-        viewGridBtn.style.display = 'flex';
-    } else {
-        viewShelvesBtn.style.display = 'none';
-        viewGridBtn.style.display = 'none';
-    }
-
     if (pageId === 'details') {
         topBackBtn.style.display = 'flex';
         topActionBtn.style.display = 'flex';
