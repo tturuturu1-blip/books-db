@@ -77,7 +77,7 @@ function renderShelvesView() {
         }
     });
 
-    // --- ЛОГИКА БЕСКОНЕЧНОЙ ПРОКРУТКИ (КАРУСЕЛИ) ---
+    // --- НАДЕЖНАЯ ЛОГИКА БЕСКОНЕЧНОЙ ПРОКРУТКИ ---
     const cabinets = Array.from(container.children);
     if (cabinets.length > 2) {
         const prependClones = cabinets.slice(-2).map(c => c.cloneNode(true));
@@ -86,7 +86,6 @@ function renderShelvesView() {
         prependClones.forEach(clone => container.insertBefore(clone, container.firstChild));
         appendClones.forEach(clone => container.appendChild(clone));
 
-        // Отключаем прилипание на время начальной установки позиции
         container.style.scrollSnapType = 'none';
         
         requestAnimationFrame(() => {
@@ -100,46 +99,42 @@ function renderShelvesView() {
         let isResetting = false;
         
         container.onscroll = () => {
-            // Если сейчас идет "телепортация", игнорируем любые движения
             if (isResetting) return;
-
             clearTimeout(scrollTimeout);
+            
             scrollTimeout = setTimeout(() => {
-                const prependedWidth = cabinets[0].offsetLeft;
+                // Используем scrollWidth для точного определения краев
+                const maxScroll = container.scrollWidth - container.clientWidth;
+                const currentScroll = container.scrollLeft;
+                
+                const firstOriginal = cabinets[0];
                 const lastOriginal = cabinets[cabinets.length - 1];
-                const originalWidth = lastOriginal.offsetLeft + lastOriginal.offsetWidth - prependedWidth;
-
-                // Округляем, так как на смартфонах scrollLeft может быть дробным
-                const currentScroll = Math.round(container.scrollLeft);
+                const originalWidth = lastOriginal.offsetLeft + lastOriginal.offsetWidth - firstOriginal.offsetLeft;
 
                 let targetScroll = null;
 
                 // Если долистали до конца (правые клоны)
-                if (currentScroll >= Math.round(prependedWidth + originalWidth - 20)) {
+                if (currentScroll >= maxScroll - 30) {
                     targetScroll = currentScroll - originalWidth;
                 } 
                 // Если долистали до начала (левые клоны)
-                else if (currentScroll <= Math.round(prependedWidth + 20)) {
+                else if (currentScroll <= 30) {
                     targetScroll = currentScroll + originalWidth;
                 }
 
                 if (targetScroll !== null) {
                     isResetting = true;
-                    
-                    // Выключаем плавность и прилипание для мгновенного прыжка
                     container.style.scrollSnapType = 'none';
                     container.style.scrollBehavior = 'auto';
                     container.scrollLeft = targetScroll;
                     
-                    // Включаем всё обратно в следующем кадре
                     requestAnimationFrame(() => {
                         container.style.scrollBehavior = '';
                         container.style.scrollSnapType = 'x mandatory';
-                        // Даем браузеру время, чтобы "переварить" прыжок и не дергаться
                         setTimeout(() => { isResetting = false; }, 50);
                     });
                 }
-            }, 150); // Ждем 150мс после окончания инерции скролла
+            }, 150); 
         };
     }
 }
