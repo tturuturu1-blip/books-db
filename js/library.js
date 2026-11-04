@@ -14,7 +14,7 @@ async function renderLibrary() {
         document.getElementById('grid-view-container').classList.add('active');
         renderGridView();
     } else {
-        document.getElementById('cabinets-container').style.display = 'flex';
+        document.getElementById('cabinets-container').style.display = 'flex'; // ИСПРАВЛЕНО на flex для карусели
         document.getElementById('grid-view-container').classList.remove('active');
         renderShelvesView();
     }
@@ -26,43 +26,95 @@ function renderShelvesView() {
     const query = state.searchQuery || '';
 
     CABINETS.forEach(cab => {
-        const cabinetDiv = document.createElement('div');
-        cabinetDiv.className = 'cabinet';
+        const totalSlots = state.library[cab].length;
+        const subCabinetsCount = Math.ceil(totalSlots / TOTAL_SLOTS);
 
-        const labelDiv = document.createElement('div');
-        labelDiv.className = 'cabinet-label';
-        labelDiv.textContent = CABINET_LABELS[cab];
-        cabinetDiv.appendChild(labelDiv);
+        for (let c = 0; c < subCabinetsCount; c++) {
+            const cabinetDiv = document.createElement('div');
+            cabinetDiv.className = 'cabinet';
 
-        for (let s = 0; s < SHELVES_PER_CABINET; s++) {
-            const shelfDiv = document.createElement('div');
-            shelfDiv.className = 'shelf';
-            const booksWrapper = document.createElement('div');
-            booksWrapper.className = 'books-wrapper';
-
-            for (let i = 0; i < SLOTS_PER_SHELF; i++) {
-                const globalSlot = s * SLOTS_PER_SHELF + i;
-                const heightClass = globalSlot % 4 === 0 ? 'h-tall' : (globalSlot % 3 === 0 ? 'h-short' : '');
-                
-                // Фильтрация поиска
-                let book = state.library[cab][globalSlot];
-                if (query && book) {
-                    const match = (book.title && book.title.toLowerCase().includes(query)) || 
-                                  (book.author && book.author.toLowerCase().includes(query));
-                    if (!match) book = null; // Скрываем несовпадающие книги
-                }
-                
-                booksWrapper.appendChild(createBookElement(cab, globalSlot, heightClass, book));
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'cabinet-label';
+            
+            // Нумерация шкафов (Читаю 1/3, 2/3 и т.д.)
+            if (subCabinetsCount > 1) {
+                labelDiv.textContent = `${CABINET_LABELS[cab]} ${c + 1}/${subCabinetsCount}`;
+            } else {
+                labelDiv.textContent = CABINET_LABELS[cab];
             }
-            shelfDiv.appendChild(booksWrapper);
-            cabinetDiv.appendChild(shelfDiv);
-        }
+            
+            cabinetDiv.appendChild(labelDiv);
 
-        const legsDiv = document.createElement('div');
-        legsDiv.className = 'cabinet-legs';
-        cabinetDiv.appendChild(legsDiv);
-        container.appendChild(cabinetDiv);
+            for (let s = 0; s < SHELVES_PER_CABINET; s++) {
+                const shelfDiv = document.createElement('div');
+                shelfDiv.className = 'shelf';
+                const booksWrapper = document.createElement('div');
+                booksWrapper.className = 'books-wrapper';
+
+                for (let i = 0; i < SLOTS_PER_SHELF; i++) {
+                    const globalSlot = c * TOTAL_SLOTS + s * SLOTS_PER_SHELF + i;
+                    const heightClass = globalSlot % 4 === 0 ? 'h-tall' : (globalSlot % 3 === 0 ? 'h-short' : '');
+                    
+                    let book = state.library[cab][globalSlot];
+                    
+                    // Фильтрация поиска
+                    if (query && book) {
+                        const match = (book.title && book.title.toLowerCase().includes(query)) || 
+                                      (book.author && book.author.toLowerCase().includes(query));
+                        if (!match) book = null;
+                    }
+                    
+                    booksWrapper.appendChild(createBookElement(cab, globalSlot, heightClass, book));
+                }
+                shelfDiv.appendChild(booksWrapper);
+                cabinetDiv.appendChild(shelfDiv);
+            }
+
+            const legsDiv = document.createElement('div');
+            legsDiv.className = 'cabinet-legs';
+            cabinetDiv.appendChild(legsDiv);
+            container.appendChild(cabinetDiv);
+        }
     });
+
+    // --- ЛОГИКА БЕСКОНЕЧНОЙ ПРОКРУТКИ (КАРУСЕЛИ) ---
+    const cabinets = Array.from(container.children);
+    if (cabinets.length > 2) {
+        const prependClones = cabinets.slice(-2).map(c => c.cloneNode(true));
+        const appendClones = cabinets.slice(0, 2).map(c => c.cloneNode(true));
+        
+        prependClones.forEach(clone => container.insertBefore(clone, container.firstChild));
+        appendClones.forEach(clone => container.appendChild(clone));
+
+        let isResetting = false;
+        
+        requestAnimationFrame(() => {
+            container.scrollLeft = cabinets[0].offsetLeft;
+        });
+
+        container.onscroll = () => {
+            if (isResetting) return;
+            
+            const prependedWidth = cabinets[0].offsetLeft;
+            const lastOriginal = cabinets[cabinets.length - 1];
+            const originalWidth = lastOriginal.offsetLeft + lastOriginal.offsetWidth - prependedWidth;
+
+            // Если доскроллили вправо до клона, телепортируем в начало
+            if (container.scrollLeft > prependedWidth + originalWidth - 10) {
+                isResetting = true;
+                container.style.scrollSnapType = 'none';
+                container.scrollLeft = container.scrollLeft - originalWidth;
+                setTimeout(() => { container.style.scrollSnapType = 'x mandatory'; isResetting = false; }, 50);
+            }
+            // Если доскроллили влево до клона, телепортируем в конец
+            else if (container.scrollLeft < prependedWidth - 10) {
+                isResetting = true;
+                container.style.scrollSnapType = 'none';
+                container.scrollLeft = container.scrollLeft + originalWidth;
+                setTimeout(() => { container.style.scrollSnapType = 'x mandatory'; isResetting = false; }, 50);
+            }
+        };
+    }
 }
 
 function createBookElement(cabinet, slot, heightClass, bookData) {
@@ -174,7 +226,9 @@ function renderGridView() {
             books.forEach(book => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'grid-book-item';
-                itemDiv.onclick = (e) => { e.stopPropagation(); openContextMenu(e, cab, book.slot); };
+                // В гриде мы ищем реальный слот книги в общем массиве
+                const realIndex = state.library[cab].indexOf(book);
+                itemDiv.onclick = (e) => { e.stopPropagation(); openContextMenu(e, cab, realIndex); };
 
                 let coverHtml;
                 if (book.cover) {
@@ -284,6 +338,7 @@ async function executeMoveToCabinet(targetCab) {
     if (!book || !book.id) { closeMoveCabinetModal(); return; }
     if (targetCab === category) { closeMoveCabinetModal(); return; }
 
+    // Ищем первый пустой слот в целевом шкафу
     const targetGrid = state.library[targetCab];
     const emptySlot = targetGrid.findIndex(b => b === null);
     if (emptySlot === -1) {
@@ -582,6 +637,7 @@ async function renderReadingNow() {
         return;
     }
     books.forEach(book => {
+        // Ищем реальный индекс в массиве
         const slotIndex = state.library.reading.indexOf(book);
         let coverHtml;
         if (book.cover) {
