@@ -191,9 +191,9 @@ async function initAppAfterAuth() {
         state.library = library;
     }
     
-    // Запускаем фоновую синхронизацию с облаком
+    // Запускаем фоновую синхронизацию с облаком при старте
     if (typeof syncAll === 'function') {
-        syncAll();
+        syncAll(); 
     }
 
     // Прогрев XLSX
@@ -221,10 +221,10 @@ async function initAppAfterAuth() {
     document.addEventListener('click', handleGlobalClick);
     window.addEventListener('scroll', handleGlobalScroll, true);
     
-    // Автосинхронизация при возврате на вкладку
+    // Автосинхронизация при возврате на вкладку (без скачивания из облака, только локальный кеш)
     document.addEventListener('visibilitychange', async () => {
-        if (!document.hidden && typeof syncAll === 'function') {
-            await syncAll();
+        if (!document.hidden) {
+            await syncAllFromDb();
             await renderLibrary();
         }
     });
@@ -363,14 +363,13 @@ async function manualSync() {
     const btn = document.getElementById('refresh-btn');
     if (!btn || btn.disabled) return;
 
-    // Блокируем кнопку визуально
     btn.disabled = true;
     btn.style.opacity = '0.5';
     
     if (typeof showToast === 'function') showToast('Обновление данных из облака...', 'info');
 
     try {
-        // 1. Скачиваем данные из Supabase в локальную БД
+        // 1. Синхронизируем с облаком (скачиваем и отправляем)
         if (typeof syncAll === 'function') {
             await syncAll();
         }
