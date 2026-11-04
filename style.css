@@ -460,7 +460,7 @@ body.dark-theme #search-input:focus {
     padding-bottom: max(20px, env(safe-area-inset-bottom));
     display: none;
     animation: fadeIn 0.3s;
-    max-width: 100%; /* Изменено для горизонтальной прокрутки */
+    max-width: 100%; 
     margin: 0 auto;
     width: 100%;
     box-sizing: border-box;
@@ -639,9 +639,10 @@ h1, h2, h3 {
     box-shadow: 0 5px 15px rgba(0,0,0,0.08);
 }
 
+/* ИЗМЕНЕНО: Ширина на телефонах теперь 75vw */
 @media (max-width: 600px) {
     .cabinet {
-        flex: 0 0 85vw; /* На телефонах шкаф почти на весь экран */
+        flex: 0 0 75vw; 
     }
 }
 
