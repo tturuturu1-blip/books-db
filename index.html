@@ -7,12 +7,10 @@
     <meta name="format-detection" content="telephone=no">
     <title>КниБум</title>
 
-    <!-- PWA Манифест -->
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="assets/icon.png">
     <link rel="icon" type="image/png" href="assets/icon.png">
 
-    <!-- Preload ключевых шрифтов -->
     <link rel="preload" href="fonts/playfair-display-v40-cyrillic_latin-regular.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/playfair-display-v40-cyrillic_latin-600.woff2" as="font" type="font/woff2" crossorigin>
 
@@ -52,11 +50,12 @@
         
         <div id="overlay" onclick="toggleSidebar()"></div>
 
-        <!-- Сайдбар -->
+        <!-- Сайдбар (теперь будет справа) -->
         <aside id="sidebar">
             <div class="sidebar-header">
-                <span>Меню</span>
+                <!-- Крестик закрытия теперь слева, так как меню справа -->
                 <button class="close-sidebar-btn" onclick="toggleSidebar()" aria-label="Закрыть меню">✕</button>
+                <span>Меню</span>
             </div>
 
             <!-- Блок профиля пользователя -->
@@ -90,15 +89,21 @@
         <!-- Основная область -->
         <div id="app-container">
             <div class="top-bar">
-                <button class="icon-btn" onclick="toggleSidebar()" aria-label="Меню">
-                    <div class="menu-icon-lines"><span></span><span></span><span></span></div>
-                </button>
-                
-                <!-- Строка поиска -->
-                <div class="search-container" id="search-container">
+                <!-- Поиск теперь слева и занимает всё свободное место -->
+                <div class="search-container" id="search-container" style="margin-left: 0;">
                     <input type="text" id="search-input" placeholder="Поиск книг..." oninput="handleLibrarySearch(this.value)">
                 </div>
 
+                <!-- Кнопка обновления данных из облака -->
+                <button class="icon-btn" id="refresh-btn" onclick="manualSync()" title="Обновить данные">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M23 4v6h-6"></path>
+                        <path d="M1 20v-6h6"></path>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                </button>
+
+                <!-- Переключатели вида -->
                 <button class="icon-btn active" id="view-shelves-btn" onclick="switchLibraryView('shelves')" title="Книжные полки">
                     <svg viewBox="0 0 24 24">
                         <line x1="3" y1="20" x2="21" y2="20"></line>
@@ -123,6 +128,11 @@
                         <line x1="19" y1="12" x2="5" y2="12"></line>
                         <polyline points="12 19 5 12 12 5"></polyline>
                     </svg>
+                </button>
+
+                <!-- Кнопка меню теперь самая правая -->
+                <button class="icon-btn" onclick="toggleSidebar()" aria-label="Меню">
+                    <div class="menu-icon-lines"><span></span><span></span><span></span></div>
                 </button>
             </div>
 
@@ -161,7 +171,6 @@
             <div id="page-stats" class="page-content">
                 <h1 class="page-title">Статистика чтения</h1>
                 
-                <!-- Виджет цели на год -->
                 <div class="goal-widget" id="goal-widget">
                     <div class="goal-header">
                         <h3>Цель на год</h3>
@@ -236,6 +245,7 @@
 
             <!-- ==================== Детали книги ==================== -->
             <div id="page-details" class="page-content">
+                <!-- ... Блок деталей книги ... -->
                 <div class="details-block" id="block-profile">
                     <div class="profile-layout">
                         <div class="profile-left">
@@ -444,8 +454,8 @@
     </div>
 
     <!-- ==================== МОДАЛЬНЫЕ ОКНА ==================== -->
-
-    <!-- Модалка цели -->
+    
+    <!-- (Весь блок модальных окон остается без изменений, копирую из предыдущего) -->
     <div class="modal-overlay" id="goal-modal">
         <div class="modal" style="max-width: 400px;">
             <button class="modal-close-x" onclick="closeGoalModal()">✕</button>
@@ -461,7 +471,6 @@
         </div>
     </div>
 
-    <!-- Кастомный confirm -->
     <div class="modal-overlay" id="custom-confirm-modal">
         <div class="modal" style="max-width: 400px; text-align: center;">
             <h2 id="confirm-title" style="margin-bottom: 15px;">Подтверждение</h2>
@@ -473,19 +482,16 @@
         </div>
     </div>
 
-    <!-- Календарь -->
     <div class="modal-overlay" id="calendar-modal">
         <div class="modal" style="max-width: 550px;">
             <button class="modal-close-x" onclick="closeCalendarModal()">✕</button>
             <h2 id="calendar-modal-title" style="padding-right: 20px;">Записи на <span id="calendar-modal-date"></span></h2>
-
             <div id="calendar-entries-view">
                 <div id="calendar-entries-list" style="display: flex; flex-direction: column; gap: 15px; max-height: 60vh; overflow-y: auto; margin-bottom: 20px; padding-right: 5px;"></div>
                 <div class="btn-group" style="justify-content: center; margin-top: 15px;">
                     <button class="btn-save" onclick="showCalendarAddBookView()" style="width: 100%;">+ Добавить книгу</button>
                 </div>
             </div>
-
             <div id="calendar-add-view" style="display: none;">
                 <div class="form-group">
                     <label>Выберите книгу</label>
@@ -506,7 +512,6 @@
         </div>
     </div>
 
-    <!-- Прогресс -->
     <div class="modal-overlay" id="progress-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeProgressModal()">✕</button>
@@ -527,19 +532,14 @@
         </div>
     </div>
 
-    <!-- Перенос даты -->
     <div class="modal-overlay" id="move-date-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeMoveDateModal()">✕</button>
             <h2>Выберите новую дату</h2>
             <div class="calendar-header" style="margin-top: 15px;">
-                <button onclick="changeMoveDateMonth(-1)" aria-label="Предыдущий месяц">
-                    <svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
-                </button>
+                <button onclick="changeMoveDateMonth(-1)"><svg viewBox="0 0 24 24"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg></button>
                 <h2 id="move-date-month-year">Месяц Год</h2>
-                <button onclick="changeMoveDateMonth(1)" aria-label="Следующий месяц">
-                    <svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
-                </button>
+                <button onclick="changeMoveDateMonth(1)"><svg viewBox="0 0 24 24"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg></button>
             </div>
             <div class="calendar-grid" id="move-date-grid"></div>
             <div class="btn-group" style="margin-top: 20px;">
@@ -548,7 +548,6 @@
         </div>
     </div>
 
-    <!-- Впечатление -->
     <div class="modal-overlay" id="add-impression-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeAddImpressionModal()">✕</button>
@@ -564,7 +563,6 @@
         </div>
     </div>
 
-    <!-- Цитата из календаря -->
     <div class="modal-overlay" id="add-quote-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeAddQuoteModal()">✕</button>
@@ -580,7 +578,6 @@
         </div>
     </div>
 
-    <!-- Персонаж -->
     <div class="modal-overlay" id="character-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeCharacterModal()">✕</button>
@@ -607,7 +604,6 @@
         </div>
     </div>
 
-    <!-- Цитата (из деталей) -->
     <div class="modal-overlay" id="quote-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeQuoteModal()">✕</button>
@@ -623,7 +619,6 @@
         </div>
     </div>
 
-    <!-- Термин -->
     <div class="modal-overlay" id="term-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeTermModal()">✕</button>
@@ -643,7 +638,6 @@
         </div>
     </div>
 
-    <!-- Переименование -->
     <div class="modal-overlay" id="edit-list-name-modal">
         <div class="modal" style="max-width: 400px;">
             <button class="modal-close-x" onclick="closeEditListNameModal()">✕</button>
@@ -659,7 +653,6 @@
         </div>
     </div>
 
-    <!-- Контекстные меню -->
     <div id="context-menu">
         <div class="context-option" onclick="ctxDetails()">Подробнее</div>
         <div class="context-option" onclick="ctxEdit()">Редактировать</div>
@@ -674,7 +667,6 @@
         <div class="context-option danger" onclick="ctxWishlistDelete()">Удалить</div>
     </div>
 
-    <!-- Модалка книги -->
     <div class="modal-overlay" id="book-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeBookModal()">✕</button>
@@ -729,7 +721,6 @@
         </div>
     </div>
 
-    <!-- Модалка книги (Wishlist) -->
     <div class="modal-overlay" id="wishlist-book-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeWishlistBookModal()">✕</button>
@@ -765,7 +756,6 @@
         </div>
     </div>
 
-    <!-- Детали Wishlist -->
     <div class="modal-overlay" id="wishlist-details-modal">
         <div class="modal" style="text-align: center;">
             <button class="modal-close-x" onclick="document.getElementById('wishlist-details-modal').style.display='none'">✕</button>
@@ -775,7 +765,6 @@
         </div>
     </div>
 
-    <!-- Перенос Wishlist -->
     <div class="modal-overlay" id="move-to-list-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="document.getElementById('move-to-list-modal').style.display='none'">✕</button>
@@ -787,7 +776,6 @@
         </div>
     </div>
 
-    <!-- Перенос шкафа -->
     <div class="modal-overlay" id="move-cabinet-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeMoveCabinetModal()">✕</button>
@@ -806,7 +794,6 @@
         </div>
     </div>
 
-    <!-- Коллекции -->
     <div class="modal-overlay" id="collection-modal">
         <div class="modal">
             <button class="modal-close-x" onclick="closeCollectionModal()">✕</button>
@@ -829,7 +816,6 @@
         </div>
     </div>
 
-    <!-- Контейнер для всплывающих уведомлений (тостов) -->
     <div id="toast-container"></div>
 
     <!-- ==================== БИБЛИОТЕКИ ==================== -->
