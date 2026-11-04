@@ -607,8 +607,7 @@ h1, h2, h3 {
     overflow-y: hidden;
     gap: 25px;
     padding: 20px 10px 30px 10px; 
-    scroll-snap-type: x mandatory; 
-    scroll-behavior: smooth;
+    scroll-snap-type: x mandatory;
     -webkit-overflow-scrolling: touch; 
     scrollbar-width: none; /* Скрываем скроллбар для Firefox */
     overscroll-behavior-x: contain;
