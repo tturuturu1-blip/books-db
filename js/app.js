@@ -70,9 +70,6 @@ async function syncLibraryFromDb() {
         if (maxSlots[cab] + 1 >= slotsNeeded) {
             slotsNeeded += TOTAL_SLOTS;
         }
-        
-        // ВАЖНО: Убрано принудительное добавление запасного шкафа.
-        // Теперь новый шкаф появится только когда заполнится текущий.
 
         library[cab] = new Array(slotsNeeded).fill(null);
     }
@@ -189,14 +186,12 @@ async function initAppAfterAuth() {
         await syncAllFromDb(); // Загрузка локальных данных в state
     } catch (e) {
         console.error('Ошибка загрузки данных:', e);
-        // Если база пуста или произошла ошибка, принудительно создаем 
-        // пустую структуру, чтобы шкафы ВСЕ РАВНО отрисовались
         const library = { reading: [], read: [], planned: [], paused: [], dropped: [] };
         for (const cab of CABINETS) library[cab] = new Array(TOTAL_SLOTS).fill(null);
         state.library = library;
     }
     
-    // Запускаем синхронизацию с облаком (в фоне)
+    // Запускаем фоновую синхронизацию с облаком
     if (typeof syncAll === 'function') {
         syncAll();
     }
@@ -359,6 +354,45 @@ async function switchLibraryView(mode) {
     if (shelvesBtn) shelvesBtn.classList.toggle('active', mode === 'shelves');
     if (gridBtn) gridBtn.classList.toggle('active', mode === 'grid');
     await renderLibrary();
+}
+
+// ============================================================
+// РУЧНАЯ СИНХРОНИЗАЦИЯ (Кнопка обновления)
+// ============================================================
+async function manualSync() {
+    const btn = document.getElementById('refresh-btn');
+    if (!btn || btn.disabled) return;
+
+    // Блокируем кнопку визуально
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    
+    if (typeof showToast === 'function') showToast('Обновление данных из облака...', 'info');
+
+    try {
+        // 1. Скачиваем данные из Supabase в локальную БД
+        if (typeof syncAll === 'function') {
+            await syncAll();
+        }
+        
+        // 2. Обновляем кеш state из локальной БД
+        await syncAllFromDb();
+        
+        // 3. Перерисовываем текущую страницу
+        await renderLibrary();
+        if (state.currentPage === 'stats' && typeof renderStats === 'function') await renderStats();
+        if (state.currentPage === 'calendar' && typeof renderCalendar === 'function') await renderCalendar();
+        if (state.currentPage === 'wishlist' && typeof renderWishlist === 'function') await renderWishlist();
+        if (state.currentPage === 'collections' && typeof renderCollections === 'function') await renderCollections();
+        
+        if (typeof showToast === 'function') showToast('Данные обновлены', 'success');
+    } catch (err) {
+        console.error('Ошибка синхронизации:', err);
+        if (typeof showToast === 'function') showToast('Ошибка обновления: ' + err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+    }
 }
 
 // ============================================================
