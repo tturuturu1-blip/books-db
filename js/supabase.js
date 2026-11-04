@@ -5,7 +5,7 @@
 
 // ⚠️ ВСТАВЬТЕ СЮДА ВАШИ ДАННЫЕ ИЗ SUPABASE (Project Settings -> API)
 const SUPABASE_URL = 'https://qkllomoiarqatvwhipnm.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_QLHITkR1hP2627h-UreptA_JjNQCkeO'; 
+const SUPABASE_ANON_KEY = 'sb_publishable_phCimARsbn_uVtFPLAjACg_ZiR4cayi'; 
 
 // Инициализация клиента (переменная называется supabaseClient)
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
