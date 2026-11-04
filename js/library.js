@@ -14,7 +14,7 @@ async function renderLibrary() {
         document.getElementById('grid-view-container').classList.add('active');
         renderGridView();
     } else {
-        document.getElementById('cabinets-container').style.display = 'flex'; // ИСПРАВЛЕНО на flex для карусели
+        document.getElementById('cabinets-container').style.display = 'flex'; // Важно для карусели
         document.getElementById('grid-view-container').classList.remove('active');
         renderShelvesView();
     }
@@ -36,7 +36,7 @@ function renderShelvesView() {
             const labelDiv = document.createElement('div');
             labelDiv.className = 'cabinet-label';
             
-            // Нумерация шкафов (Читаю 1/3, 2/3 и т.д.)
+            // Нумерация шкафов
             if (subCabinetsCount > 1) {
                 labelDiv.textContent = `${CABINET_LABELS[cab]} ${c + 1}/${subCabinetsCount}`;
             } else {
@@ -86,33 +86,60 @@ function renderShelvesView() {
         prependClones.forEach(clone => container.insertBefore(clone, container.firstChild));
         appendClones.forEach(clone => container.appendChild(clone));
 
-        let isResetting = false;
+        // Отключаем прилипание на время начальной установки позиции
+        container.style.scrollSnapType = 'none';
         
         requestAnimationFrame(() => {
             container.scrollLeft = cabinets[0].offsetLeft;
+            setTimeout(() => {
+                container.style.scrollSnapType = 'x mandatory';
+            }, 50);
         });
 
+        let scrollTimeout;
+        let isResetting = false;
+        
         container.onscroll = () => {
+            // Если сейчас идет "телепортация", игнорируем любые движения
             if (isResetting) return;
-            
-            const prependedWidth = cabinets[0].offsetLeft;
-            const lastOriginal = cabinets[cabinets.length - 1];
-            const originalWidth = lastOriginal.offsetLeft + lastOriginal.offsetWidth - prependedWidth;
 
-            // Если доскроллили вправо до клона, телепортируем в начало
-            if (container.scrollLeft > prependedWidth + originalWidth - 10) {
-                isResetting = true;
-                container.style.scrollSnapType = 'none';
-                container.scrollLeft = container.scrollLeft - originalWidth;
-                setTimeout(() => { container.style.scrollSnapType = 'x mandatory'; isResetting = false; }, 50);
-            }
-            // Если доскроллили влево до клона, телепортируем в конец
-            else if (container.scrollLeft < prependedWidth - 10) {
-                isResetting = true;
-                container.style.scrollSnapType = 'none';
-                container.scrollLeft = container.scrollLeft + originalWidth;
-                setTimeout(() => { container.style.scrollSnapType = 'x mandatory'; isResetting = false; }, 50);
-            }
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                const prependedWidth = cabinets[0].offsetLeft;
+                const lastOriginal = cabinets[cabinets.length - 1];
+                const originalWidth = lastOriginal.offsetLeft + lastOriginal.offsetWidth - prependedWidth;
+
+                // Округляем, так как на смартфонах scrollLeft может быть дробным
+                const currentScroll = Math.round(container.scrollLeft);
+
+                let targetScroll = null;
+
+                // Если долистали до конца (правые клоны)
+                if (currentScroll >= Math.round(prependedWidth + originalWidth - 20)) {
+                    targetScroll = currentScroll - originalWidth;
+                } 
+                // Если долистали до начала (левые клоны)
+                else if (currentScroll <= Math.round(prependedWidth + 20)) {
+                    targetScroll = currentScroll + originalWidth;
+                }
+
+                if (targetScroll !== null) {
+                    isResetting = true;
+                    
+                    // Выключаем плавность и прилипание для мгновенного прыжка
+                    container.style.scrollSnapType = 'none';
+                    container.style.scrollBehavior = 'auto';
+                    container.scrollLeft = targetScroll;
+                    
+                    // Включаем всё обратно в следующем кадре
+                    requestAnimationFrame(() => {
+                        container.style.scrollBehavior = '';
+                        container.style.scrollSnapType = 'x mandatory';
+                        // Даем браузеру время, чтобы "переварить" прыжок и не дергаться
+                        setTimeout(() => { isResetting = false; }, 50);
+                    });
+                }
+            }, 150); // Ждем 150мс после окончания инерции скролла
         };
     }
 }
@@ -226,7 +253,6 @@ function renderGridView() {
             books.forEach(book => {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'grid-book-item';
-                // В гриде мы ищем реальный слот книги в общем массиве
                 const realIndex = state.library[cab].indexOf(book);
                 itemDiv.onclick = (e) => { e.stopPropagation(); openContextMenu(e, cab, realIndex); };
 
@@ -338,7 +364,6 @@ async function executeMoveToCabinet(targetCab) {
     if (!book || !book.id) { closeMoveCabinetModal(); return; }
     if (targetCab === category) { closeMoveCabinetModal(); return; }
 
-    // Ищем первый пустой слот в целевом шкафу
     const targetGrid = state.library[targetCab];
     const emptySlot = targetGrid.findIndex(b => b === null);
     if (emptySlot === -1) {
@@ -475,7 +500,7 @@ async function saveBook() {
     const existing = isNew ? null : state.library[category][index];
 
     const record = {
-        id: bookId || generateUUID(), // Генерируем UUID для новой книги
+        id: bookId || generateUUID(),
         cabinet: category,
         slot: index,
         title, author,
@@ -637,7 +662,6 @@ async function renderReadingNow() {
         return;
     }
     books.forEach(book => {
-        // Ищем реальный индекс в массиве
         const slotIndex = state.library.reading.indexOf(book);
         let coverHtml;
         if (book.cover) {
