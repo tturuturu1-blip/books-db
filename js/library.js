@@ -14,7 +14,7 @@ async function renderLibrary() {
         document.getElementById('grid-view-container').classList.add('active');
         renderGridView();
     } else {
-        document.getElementById('cabinets-container').style.display = 'grid';
+        document.getElementById('cabinets-container').style.display = 'flex';
         document.getElementById('grid-view-container').classList.remove('active');
         renderShelvesView();
     }
