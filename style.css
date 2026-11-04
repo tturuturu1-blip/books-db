@@ -132,13 +132,12 @@ body {
     height: 100vh;
     height: 100dvh;
     overflow: hidden;
-    overscroll-behavior-y: none; /* Отключает Pull-to-refresh */
+    overscroll-behavior-y: none;
     -webkit-font-smoothing: antialiased;
     -webkit-tap-highlight-color: transparent;
     transition: background-color 0.3s, color 0.3s;
 }
 
-/* Запрет выделения для UI-элементов, но разрешаем для контента */
 button, .icon-btn, .menu-item, .book, .cabinet-label, .top-bar, .sidebar-header {
     user-select: none;
     -webkit-user-select: none;
@@ -219,7 +218,6 @@ input, textarea, .readonly-value, .detail-list-item-desc {
 /* ============================================================
    ОСНОВНОЙ ИНТЕРФЕЙС
    ============================================================ */
-/* ИСПРАВЛЕНИЕ: Контейнер теперь занимает всю ширину и высоту */
 #main-app {
     display: flex;
     width: 100%;
@@ -290,6 +288,51 @@ body:has(#sidebar.open) #app-container {
     transition: transform 0.2s;
 }
 
+/* ПРОФИЛЬ В САЙДБАРЕ */
+.sidebar-profile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 15px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    background: rgba(0, 0, 0, 0.02);
+}
+
+body.dark-theme .sidebar-profile {
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.profile-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: var(--bg-color);
+    border: 2px solid var(--ink-color);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    color: var(--ink-color);
+}
+
+.profile-avatar svg {
+    width: 32px;
+    height: 32px;
+    stroke: currentColor;
+}
+
+.profile-email {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-color);
+    opacity: 0.8;
+    text-align: center;
+    word-break: break-all;
+    max-width: 100%;
+}
+
 .menu-list {
     list-style: none;
     padding: 10px 15px;
@@ -318,6 +361,7 @@ body:has(#sidebar.open) #app-container {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
+    overflow-x: hidden;
     position: relative;
     width: 100%;
 }
@@ -416,7 +460,7 @@ body.dark-theme #search-input:focus {
     padding-bottom: max(20px, env(safe-area-inset-bottom));
     display: none;
     animation: fadeIn 0.3s;
-    max-width: 1300px;
+    max-width: 100%; /* Изменено для горизонтальной прокрутки */
     margin: 0 auto;
     width: 100%;
     box-sizing: border-box;
@@ -556,35 +600,51 @@ h1, h2, h3 {
 /* ============================================================
    ШКАФЫ, ПОЛКИ И КНИГИ
    ============================================================ */
+
+/* Горизонтальная прокрутка для шкафов */
 .cabinets-grid {
-    display: grid;
-    /* Уменьшаем минимальную ширину до 300px, чтобы 2 шкафа влезали легче */
-    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
     gap: 25px;
-    margin-top: 10px;
+    padding: 20px 10px 30px 10px; 
+    scroll-snap-type: x mandatory; 
+    -webkit-overflow-scrolling: touch; 
+    scrollbar-width: thin; 
+    overscroll-behavior-x: contain;
 }
 
-/* Явно задаем 2 колонки для планшетов (от 601px до 1024px) */
-@media (min-width: 601px) and (max-width: 1024px) {
-    .cabinets-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 20px;
-    }
+.cabinets-grid::-webkit-scrollbar {
+    height: 6px;
 }
-
-/* Для мобильных телефонов оставляем 1 колонку */
-@media (max-width: 600px) {
-    .cabinets-grid {
-        grid-template-columns: 1fr;
-    }
+.cabinets-grid::-webkit-scrollbar-thumb {
+    background-color: var(--ink-color);
+    border-radius: 3px;
+    opacity: 0.5;
+}
+.cabinets-grid::-webkit-scrollbar-track {
+    background: transparent;
 }
 
 .cabinet {
-    position: relative; background-color: var(--paper-bg);
-    border: 1.5px solid var(--ink-color); padding: 12px;
-    margin-top: 20px; margin-bottom: 35px; border-radius: 4px;
+    position: relative; 
+    background-color: var(--paper-bg);
+    border: 1.5px solid var(--ink-color); 
+    padding: 12px;
+    flex: 0 0 340px; /* Ширина шкафа фиксирована для скролла */
+    scroll-snap-align: center; 
+    margin: 0; 
+    border-radius: 4px;
     box-shadow: 0 5px 15px rgba(0,0,0,0.08);
 }
+
+@media (max-width: 600px) {
+    .cabinet {
+        flex: 0 0 85vw; /* На телефонах шкаф почти на весь экран */
+    }
+}
+
 body.dark-theme .cabinet { box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
 
 .cabinet::after {
@@ -625,19 +685,40 @@ body.dark-theme .cabinet::after {
     display: flex; align-items: flex-end; padding-bottom: 3px;
 }
 .shelf:last-child { border-bottom: none; box-shadow: none; margin-bottom: 0; }
+
+/* Запрет переноса книг на вторую строку внутри полки */
 .books-wrapper {
-    display: flex; flex-wrap: wrap; justify-content: center;
-    align-items: flex-end; gap: 4px; width: 100%;
-    padding: 0 5px; box-sizing: border-box;
-    min-height: var(--book-height-tall); position: relative; z-index: 5;
+    display: flex; 
+    flex-wrap: nowrap; /* Строго в один ряд */
+    justify-content: center;
+    align-items: flex-end; 
+    gap: 2px; 
+    width: 100%;
+    padding: 0 2px; 
+    box-sizing: border-box;
+    min-height: var(--book-height-tall); 
+    position: relative; 
+    z-index: 5;
+    overflow: hidden; 
 }
+
 .book {
-    width: var(--book-width); height: var(--book-height);
-    border: 1px solid var(--ink-color); border-radius: 2px 2px 0 0;
-    background-color: var(--paper-bg); cursor: pointer;
-    transition: all 0.2s; position: relative; display: flex; flex-direction: column;
-    justify-content: space-between; align-items: center;
-    box-sizing: border-box; flex-shrink: 0; overflow: hidden;
+    width: var(--book-width); 
+    height: var(--book-height);
+    border: 1px solid var(--ink-color); 
+    border-radius: 2px 2px 0 0;
+    background-color: var(--paper-bg); 
+    cursor: pointer;
+    transition: all 0.2s; 
+    position: relative; 
+    display: flex; 
+    flex-direction: column;
+    justify-content: space-between; 
+    align-items: center;
+    box-sizing: border-box; 
+    flex-shrink: 1; /* Позволяем сжиматься, чтобы все книги влезли */
+    min-width: 18px; 
+    overflow: hidden;
     box-shadow: inset -2px 0 5px rgba(0,0,0,0.1), 1px 0 3px rgba(0,0,0,0.15);
 }
 body.dark-theme .book {
@@ -1086,17 +1167,14 @@ body.dark-theme .collection-header, body.dark-theme .wishlist-header { border-co
 .wishlist-checkbox svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; display: none; }
 .wishlist-checkbox.checked svg { display: block; }
 
-/* Стили для блока загрузки корешка/обложки */
 .spine-bg-section { background: var(--bg-color); padding: 15px; border-radius: 8px; border: 1px dashed #aaa; margin-top: 20px; position: relative; }
 .spine-bg-section > label { display: block; text-align: center; margin-bottom: 15px; font-weight: 600; font-size: 13px; }
 .spine-bg-preview { display: flex; justify-content: center; margin-top: 15px; }
 
-/* Паттерны */
 .patterns-grid { display: grid; grid-template-columns: repeat(10, 1fr); gap: 5px; margin-top: 5px; max-height: 120px; overflow-y: auto; padding-right: 5px; }
 .pattern-option { padding: 5px; text-align: center; border: 1px solid #ccc; cursor: pointer; font-size: 16px; border-radius: 4px; display: flex; justify-content: center; align-items: center; height: 32px; background: var(--paper-bg); color: var(--ink-color); }
 .pattern-option.selected { background: var(--ink-color); color: var(--paper-bg); border-color: var(--ink-color); }
 
-/* Утилиты */
 .hidden { display: none !important; }
 .text-center { text-align: center; }
 #import-file { display: none; }
@@ -1108,51 +1186,4 @@ body.dark-theme .collection-header, body.dark-theme .wishlist-header { border-co
     .charts-grid { grid-template-columns: 1fr; }
     .chart-canvas-wrapper { height: 220px; }
     .search-container { margin: 0; } 
-}
-
-/* ============================================================
-   ПРОФИЛЬ В САЙДБАРЕ
-   ============================================================ */
-.sidebar-profile {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px 15px;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-    background: rgba(0, 0, 0, 0.02);
-}
-
-body.dark-theme .sidebar-profile {
-    border-bottom-color: rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.02);
-}
-
-.profile-avatar {
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background-color: var(--bg-color);
-    border: 2px solid var(--ink-color);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-bottom: 10px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    color: var(--ink-color);
-}
-
-.profile-avatar svg {
-    width: 32px;
-    height: 32px;
-    stroke: currentColor;
-}
-
-.profile-email {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--ink-color);
-    opacity: 0.8;
-    text-align: center;
-    word-break: break-all;
-    max-width: 100%;
 }
