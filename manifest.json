@@ -1,0 +1,20 @@
+{
+  "name": "КниБум",
+  "short_name": "КниБум",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#d2cbc0",
+  "theme_color": "#d2cbc0",
+  "icons": [
+    {
+      "src": "assets/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
