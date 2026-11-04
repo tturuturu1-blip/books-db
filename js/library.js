@@ -1,8 +1,7 @@
 // js/library.js
 // ============================================================
-// Шкафы, полки, плитка, книга-модал, drag & drop, контекстное меню,
-// «Читаю сейчас», рекомендации, поиск.
-// Требует: utils.js, db.js, app.js.
+// Шкафы, полки, плитка, книга-модал, drag & drop, контекстное меню.
+// Использует делегирование событий для работы клонов.
 // ============================================================
 
 let draggedItem = null; 
@@ -23,7 +22,6 @@ async function renderLibrary() {
 function renderShelvesView() {
     const container = document.getElementById('cabinets-container');
     container.innerHTML = '';
-    const query = state.searchQuery || '';
 
     CABINETS.forEach(cab => {
         const totalSlots = state.library[cab].length;
@@ -54,13 +52,7 @@ function renderShelvesView() {
                     const globalSlot = c * TOTAL_SLOTS + s * SLOTS_PER_SHELF + i;
                     const heightClass = globalSlot % 4 === 0 ? 'h-tall' : (globalSlot % 3 === 0 ? 'h-short' : '');
                     
-                    let book = state.library[cab][globalSlot];
-                    if (query && book) {
-                        const match = (book.title && book.title.toLowerCase().includes(query)) || 
-                                      (book.author && book.author.toLowerCase().includes(query));
-                        if (!match) book = null;
-                    }
-                    
+                    const book = state.library[cab][globalSlot];
                     booksWrapper.appendChild(createBookElement(cab, globalSlot, heightClass, book));
                 }
                 shelfDiv.appendChild(booksWrapper);
@@ -132,7 +124,6 @@ function renderShelvesView() {
     }
 
     // --- ДЕЛЕГИРОВАНИЕ СОБЫТИЙ (РАБОТАЕТ ДЛЯ КЛОНОВ) ---
-    // Вместо назначения onclick на каждую книгу, мы ловим клик на контейнере.
     container.onclick = (e) => {
         const bookDiv = e.target.closest('.book');
         if (!bookDiv) return;
@@ -180,8 +171,6 @@ function createBookElement(cabinet, slot, heightClass, bookData) {
     }
 
     bookDiv.className = `book ${heightClass} ${dynamicWidthClass}`;
-    
-    // Добавляем data-атрибуты для делегирования событий
     bookDiv.dataset.cabinet = cabinet;
     bookDiv.dataset.slot = slot;
 
@@ -233,16 +222,9 @@ function createBookElement(cabinet, slot, heightClass, bookData) {
 function renderGridView() {
     const container = document.getElementById('grid-view-container');
     container.innerHTML = '';
-    const query = state.searchQuery || '';
 
     CABINETS.forEach(cab => {
-        let books = state.library[cab].filter(b => b !== null);
-        if (query) {
-            books = books.filter(b => 
-                (b.title && b.title.toLowerCase().includes(query)) || 
-                (b.author && b.author.toLowerCase().includes(query))
-            );
-        }
+        const books = state.library[cab].filter(b => b !== null);
         
         const groupDiv = document.createElement('div');
         groupDiv.className = 'grid-cabinet-group';
