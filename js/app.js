@@ -193,7 +193,7 @@ async function initAppAfterAuth() {
     
     // Запускаем фоновую синхронизацию с облаком при старте
     if (typeof syncAll === 'function') {
-        syncAll(); 
+        syncAll().catch(e => console.warn('Фоновый синк не удался:', e));
     }
 
     // Прогрев XLSX
@@ -366,7 +366,7 @@ async function manualSync() {
     btn.disabled = true;
     btn.style.opacity = '0.5';
     
-    if (typeof showToast === 'function') showToast('Синхронизация...', 'info');
+    if (typeof showToast === 'function') showToast('Синхронизация с облаком...', 'info');
 
     try {
         // 1. Ждём полного завершения синхронизации (скачивание + отправка)
