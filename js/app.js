@@ -51,15 +51,38 @@ function invalidateTagsCache() { _tagCache = null; }
 // ============================================================
 async function syncLibraryFromDb() {
     const library = { reading: [], read: [], planned: [], paused: [], dropped: [] };
-    for (const cab of CABINETS) {
-        library[cab] = new Array(TOTAL_SLOTS).fill(null);
-    }
     const books = await getAllBooks();
+    
+    // Находим максимальный индекс ячейки для каждого шкафа
+    const maxSlots = { reading: 0, read: 0, planned: 0, paused: 0, dropped: 0 };
     books.forEach(b => {
-        if (library[b.cabinet] && b.slot >= 0 && b.slot < TOTAL_SLOTS) {
+        if (maxSlots[b.cabinet] !== undefined && b.slot >= 0) {
+            if (b.slot > maxSlots[b.cabinet]) maxSlots[b.cabinet] = b.slot;
+        }
+    });
+
+    for (const cab of CABINETS) {
+        // Вычисляем, сколько ячеек нужно (минимум 1 шкаф = 28 слотов)
+        let slotsNeeded = Math.ceil((maxSlots[cab] + 1) / TOTAL_SLOTS) * TOTAL_SLOTS;
+        if (slotsNeeded === 0) slotsNeeded = TOTAL_SLOTS;
+
+        // Если последний шкаф заполнен ровно под завязку, добавляем еще один пустой
+        if (maxSlots[cab] + 1 >= slotsNeeded) {
+            slotsNeeded += TOTAL_SLOTS;
+        }
+        
+        // Добавляем один запасной шкаф, чтобы всегда было куда нажать "+"
+        slotsNeeded += TOTAL_SLOTS;
+
+        library[cab] = new Array(slotsNeeded).fill(null);
+    }
+
+    books.forEach(b => {
+        if (library[b.cabinet] && b.slot >= 0 && b.slot < library[b.cabinet].length) {
             library[b.cabinet][b.slot] = b;
         }
     });
+    
     state.library = library;
 }
 
@@ -155,10 +178,9 @@ function findBookByTitleLocal(title) {
 // ============================================================
 // ИНИЦИАЛИЗАЦИЯ ПОСЛЕ АВТОРИЗАЦИИ
 // ============================================================
-
 async function initAppAfterAuth() {
     try {
-        await initDb(); // Инициализация Dexie и миграций
+        await initDb(); // Инициализация Dexie
     } catch (e) {
         console.error('Ошибка инициализации БД:', e);
     }
@@ -180,7 +202,9 @@ async function initAppAfterAuth() {
     }
 
     // Прогрев XLSX
-    fetchDbBooks().catch(() => {});
+    if (typeof fetchDbBooks === 'function') {
+        fetchDbBooks().catch(() => {});
+    }
 
     // Инициализация UI-компонентов
     if (typeof initPatternsGrid === 'function') initPatternsGrid();
@@ -242,20 +266,13 @@ function handleGlobalScroll(e) {
 // ============================================================
 // НАВИГАЦИЯ
 // ============================================================
-
 function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open');
     document.getElementById('overlay').classList.toggle('active');
 }
 
 const PAGE_INDEX_MAP = {
-    'library': 0,
-    'reading-now': 1,
-    'calendar': 2,
-    'stats': 3,
-    'collections': 4,
-    'wishlist': 5,
-    'recommendations': 6
+    'library': 0, 'reading-now': 1, 'calendar': 2, 'stats': 3, 'collections': 4, 'wishlist': 5, 'recommendations': 6
 };
 
 async function navigateTo(pageId) {
@@ -283,7 +300,6 @@ async function navigateTo(pageId) {
     const viewGridBtn = document.getElementById('view-grid-btn');
     const searchContainer = document.getElementById('search-container');
 
-    // Поиск показываем только в библиотеке
     searchContainer.style.display = (pageId === 'library') ? 'flex' : 'none';
 
     if (pageId === 'library') {
