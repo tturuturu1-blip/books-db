@@ -7,10 +7,12 @@
     <meta name="format-detection" content="telephone=no">
     <title>КниБум</title>
 
+    <!-- PWA Манифест -->
     <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="assets/icon.png">
-    <link rel="icon" type="image/png" href="assets/icon.png">
+    <link rel="apple-touch-icon" href="assets/avatar.png">
+    <link rel="icon" type="image/png" href="assets/avatar.png">
 
+    <!-- Preload ключевых шрифтов -->
     <link rel="preload" href="fonts/playfair-display-v40-cyrillic_latin-regular.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="preload" href="fonts/playfair-display-v40-cyrillic_latin-600.woff2" as="font" type="font/woff2" crossorigin>
 
@@ -23,7 +25,7 @@
     <!-- ==================== ЭКРАН АВТОРИЗАЦИИ ==================== -->
     <div id="auth-screen" style="display: flex;">
         <div class="auth-card">
-            <img src="assets/icon.png" alt="КниБум" class="auth-logo">
+            <img src="assets/avatar.png" alt="КниБум" class="auth-logo">
             <h1 class="auth-title">Книжный бум</h1>
             <p class="auth-subtitle">Твой волшебный читательский дневник</p>
             
@@ -50,10 +52,9 @@
         
         <div id="overlay" onclick="toggleSidebar()"></div>
 
-        <!-- Сайдбар (теперь будет справа) -->
+        <!-- Сайдбар -->
         <aside id="sidebar">
             <div class="sidebar-header">
-                <!-- Крестик закрытия теперь слева, так как меню справа -->
                 <button class="close-sidebar-btn" onclick="toggleSidebar()" aria-label="Закрыть меню">✕</button>
                 <span>Меню</span>
             </div>
@@ -61,10 +62,7 @@
             <!-- Блок профиля пользователя -->
             <div class="sidebar-profile">
                 <div class="profile-avatar">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
+                    <img src="assets/avatar.png" alt="Аватар">
                 </div>
                 <div class="profile-email" id="sidebar-user-email">Загрузка...</div>
             </div>
@@ -89,7 +87,7 @@
         <!-- Основная область -->
         <div id="app-container">
             <div class="top-bar">
-                <!-- Поиск теперь слева и занимает всё свободное место -->
+                <!-- Поиск слева -->
                 <div class="search-container" id="search-container" style="margin-left: 0;">
                     <input type="text" id="search-input" placeholder="Поиск книг..." oninput="handleLibrarySearch(this.value)">
                 </div>
@@ -130,7 +128,7 @@
                     </svg>
                 </button>
 
-                <!-- Кнопка меню теперь самая правая -->
+                <!-- Кнопка меню справа -->
                 <button class="icon-btn" onclick="toggleSidebar()" aria-label="Меню">
                     <div class="menu-icon-lines"><span></span><span></span><span></span></div>
                 </button>
@@ -245,7 +243,6 @@
 
             <!-- ==================== Детали книги ==================== -->
             <div id="page-details" class="page-content">
-                <!-- ... Блок деталей книги ... -->
                 <div class="details-block" id="block-profile">
                     <div class="profile-layout">
                         <div class="profile-left">
@@ -455,7 +452,6 @@
 
     <!-- ==================== МОДАЛЬНЫЕ ОКНА ==================== -->
     
-    <!-- (Весь блок модальных окон остается без изменений, копирую из предыдущего) -->
     <div class="modal-overlay" id="goal-modal">
         <div class="modal" style="max-width: 400px;">
             <button class="modal-close-x" onclick="closeGoalModal()">✕</button>
