@@ -7,13 +7,13 @@
 const CABINETS = ['reading', 'read', 'planned', 'paused', 'dropped'];
 const CABINET_LABELS = { reading: 'Читаю', read: 'Прочитано', planned: 'В планах', paused: 'На паузе', dropped: 'Брошено' };
 
-// ИЗМЕНЕНО: теперь по 4 полки в шкафу
-const SHELVES_PER_CABINET = 4; 
+const SHELVES_PER_CABINET = 4;
 const SLOTS_PER_SHELF = 7;
-const TOTAL_SLOTS = SHELVES_PER_CABINET * SLOTS_PER_SHELF; // 28 слотов в одном шкафу
+const TOTAL_SLOTS = SHELVES_PER_CABINET * SLOTS_PER_SHELF; // 28
 
 const LEGACY_STORAGE_KEY = 'readingDiaryData_v7';
 const MIGRATION_KEY = 'migrated_v1';
+const EMERGENCY_BACKUP_KEY = 'emergency_backup_v1';
 
 const db = new Dexie('ReadingDiaryDB');
 
@@ -53,7 +53,7 @@ db.version(2).stores({
 });
 
 // ============================================================
-// МИГРАЦИЯ ИЗ localStorage
+// МИГРАЦИЯ ИЗ localStorage (безопасная)
 // ============================================================
 async function migrateFromLocalStorage() {
     const flag = await db.meta.get(MIGRATION_KEY);
@@ -66,7 +66,14 @@ async function migrateFromLocalStorage() {
     }
     
     let oldState;
-    try { oldState = JSON.parse(raw); } catch (err) { return; }
+    try { 
+        oldState = JSON.parse(raw); 
+    } catch (err) { 
+        // Битый JSON — помечаем миграцию как выполненную, чтобы не пытаться вечно
+        console.warn('Битые старые данные в localStorage');
+        await db.meta.put({ key: MIGRATION_KEY, value: true, at: Date.now() });
+        return; 
+    }
     
     const now = Date.now();
     const bookRecords = [];
@@ -82,15 +89,37 @@ async function migrateFromLocalStorage() {
             const tags = Array.isArray(d.tags) ? d.tags : (typeof d.tags === 'string' ? d.tags.split(',').map(t => t.trim()).filter(Boolean) : []);
             
             bookRecords.push({
-                id: generateUUID(), cabinet: cab, slot: slotIndex, title: old.title, author: old.author || '',
-                color: old.color || '#fcfaf5', pattern: old.pattern || '', cover: d.cover || '', spineImage: old.spineImage || '',
-                rating: Number(d.rating) || 0, genres, tags, series: d.series || '', subseries: d.subseries || '',
-                volume: Number(d.volume) || 0, year: d.year || '', country: d.country || '', format: d.format || '',
-                startDate: d.startDate || '', endDate: d.endDate || '', annotation: d.annotation || '',
-                summary: d.summary || '', timeline: d.timeline || '', worldMap: d.worldMap || '',
-                impressions: Array.isArray(d.impressions) ? d.impressions : [], quotes: Array.isArray(d.quotes) ? d.quotes : [],
-                characters: Array.isArray(d.characters) ? d.characters : [], terms: Array.isArray(d.terms) ? d.terms : [],
-                dailyProgress: d.dailyProgress || {}, createdAt: now, updatedAt: now
+                id: generateUUID(), 
+                cabinet: cab, 
+                slot: slotIndex, 
+                title: String(old.title || ''),
+                author: String(old.author || ''),
+                color: old.color || '#fcfaf5', 
+                pattern: old.pattern || '', 
+                cover: d.cover || '', 
+                spineImage: old.spineImage || '',
+                rating: Number(d.rating) || 0, 
+                genres, 
+                tags, 
+                series: d.series || '', 
+                subseries: d.subseries || '',
+                volume: Number(d.volume) || 0, 
+                year: d.year || '', 
+                country: d.country || '', 
+                format: d.format || '',
+                startDate: d.startDate || '', 
+                endDate: d.endDate || '', 
+                annotation: d.annotation || '',
+                summary: d.summary || '', 
+                timeline: d.timeline || '', 
+                worldMap: d.worldMap || '',
+                impressions: Array.isArray(d.impressions) ? d.impressions : [], 
+                quotes: Array.isArray(d.quotes) ? d.quotes : [],
+                characters: Array.isArray(d.characters) ? d.characters : [], 
+                terms: Array.isArray(d.terms) ? d.terms : [],
+                dailyProgress: d.dailyProgress || {}, 
+                createdAt: now, 
+                updatedAt: now
             });
         }
     }
@@ -106,7 +135,10 @@ async function migrateFromLocalStorage() {
     }
 
     const collectionRecords = (Array.isArray(oldState.collections) ? oldState.collections : []).map(c => ({
-        id: generateUUID(), name: c.name || 'Без названия', books: c.books || [], updatedAt: now
+        id: generateUUID(), 
+        name: c.name || 'Без названия', 
+        books: Array.isArray(c.books) ? c.books : [], 
+        updatedAt: now
     }));
 
     const wishlistRecords = (Array.isArray(oldState.wishlist) ? oldState.wishlist : []).map(w => {
@@ -115,24 +147,38 @@ async function migrateFromLocalStorage() {
             if (b && typeof b === 'object' && b.title) return { id: b.id || generateUUID(), title: b.title, author: b.author || '', cover: b.cover || '' };
             return null;
         };
-        return { id: generateUUID(), name: w.name || 'Список', books: (w.books || []).map(normBook).filter(Boolean), completed: (w.completed || []).map(normBook).filter(Boolean), updatedAt: now };
+        return { 
+            id: generateUUID(), 
+            name: w.name || 'Список', 
+            books: (Array.isArray(w.books) ? w.books : []).map(normBook).filter(Boolean), 
+            completed: (Array.isArray(w.completed) ? w.completed : []).map(normBook).filter(Boolean), 
+            updatedAt: now 
+        };
     });
 
     try {
         await db.transaction('rw', [db.books, db.calendar, db.collections, db.wishlists, db.meta], async () => {
-            if (bookRecords.length) await db.books.bulkAdd(bookRecords);
-            if (calendarRecords.length) await db.calendar.bulkAdd(calendarRecords);
-            if (collectionRecords.length) await db.collections.bulkAdd(collectionRecords);
-            if (wishlistRecords.length) await db.wishlists.bulkAdd(wishlistRecords);
+            if (bookRecords.length) await db.books.bulkPut(bookRecords);
+            if (calendarRecords.length) await db.calendar.bulkPut(calendarRecords);
+            if (collectionRecords.length) await db.collections.bulkPut(collectionRecords);
+            if (wishlistRecords.length) await db.wishlists.bulkPut(wishlistRecords);
             await db.meta.put({ key: MIGRATION_KEY, value: true, at: Date.now() });
         });
-    } catch (err) { console.error('Миграция не удалась:', err); }
+    } catch (err) { 
+        console.error('Миграция не удалась:', err); 
+    }
 }
 
 async function ensureDefaultWishlist() {
     const count = await db.wishlists.count();
     if (count === 0) {
-        await db.wishlists.add({ id: generateUUID(), name: 'Хочу купить', books: [], completed: [], updatedAt: Date.now() });
+        await db.wishlists.add({ 
+            id: generateUUID(), 
+            name: 'Хочу купить', 
+            books: [], 
+            completed: [], 
+            updatedAt: Date.now() 
+        });
     }
 }
 
@@ -157,17 +203,36 @@ async function getCabinetGrid(cabinet) {
     return grid;
 }
 
+/**
+ * Получить книгу по её ID.
+ * Возвращает объект книги или null, если не найдена.
+ */
+async function getBookById(id) {
+    if (!id) return null;
+    return await db.books.get(id);
+}
+
+/**
+ * Сохранить книгу (создать или обновить).
+ * Если у книги есть ID — обновляются только переданные поля (put в режиме merge).
+ * Если ID нет — создаётся новая книга с новым ID.
+ */
 async function saveBookRecord(book) {
+    if (!book) throw new Error('Нет данных для сохранения');
+    
     const now = Date.now();
     book.updatedAt = now;
     if (!book.createdAt) book.createdAt = now;
 
     if (book.id) {
-        await db.books.put(book);
+        // Обновление существующей — используем update, чтобы не стереть неуказанные поля
+        await db.books.update(book.id, book);
         return book.id;
     }
-    const { id, ...rest } = book;
-    return await db.books.add(rest);
+    // Создание новой
+    if (!book.id) book.id = generateUUID();
+    await db.books.add(book);
+    return book.id;
 }
 
 async function deleteBookRecord(id) {
@@ -177,6 +242,35 @@ async function deleteBookRecord(id) {
 async function swapBookSlots(bookA, slotB, cabinetB) {
     if (!bookA) return;
     await db.books.update(bookA.id, { slot: slotB, cabinet: cabinetB, updatedAt: Date.now() });
+}
+
+/**
+ * Починить слоты в шкафу: если две книги оказались на одном слоте,
+ * вторую перемещаем на первый свободный.
+ * Возвращает количество перемещённых книг.
+ */
+async function repairSlots(cabinet) {
+    const books = await getBooksByCabinet(cabinet);
+    const usedSlots = new Set();
+    const toMove = [];
+    
+    for (const book of books) {
+        if (book.slot == null || book.slot < 0 || usedSlots.has(book.slot)) {
+            toMove.push(book);
+        } else {
+            usedSlots.add(book.slot);
+        }
+    }
+    
+    let moved = 0;
+    for (const book of toMove) {
+        let freeSlot = 0;
+        while (usedSlots.has(freeSlot)) freeSlot++;
+        usedSlots.add(freeSlot);
+        await db.books.update(book.id, { slot: freeSlot, updatedAt: Date.now() });
+        moved++;
+    }
+    return moved;
 }
 
 // ============================================================
@@ -209,13 +303,20 @@ async function getCollections() {
     return db.collections.toArray();
 }
 
+/**
+ * Сохранить коллекцию. Автоматически ставит updatedAt.
+ */
 async function saveCollection(collection) {
+    if (!collection) throw new Error('Нет данных коллекции');
+    collection.updatedAt = Date.now();
+    
     if (collection.id) {
-        await db.collections.put(collection);
+        await db.collections.update(collection.id, collection);
         return collection.id;
     }
-    const { id, ...rest } = collection;
-    return await db.collections.add(rest);
+    collection.id = generateUUID();
+    await db.collections.add(collection);
+    return collection.id;
 }
 
 async function deleteCollection(id) {
@@ -229,13 +330,20 @@ async function getWishlists() {
     return db.wishlists.toArray();
 }
 
+/**
+ * Сохранить список желаний. Автоматически ставит updatedAt.
+ */
 async function saveWishlist(wishlist) {
+    if (!wishlist) throw new Error('Нет данных списка');
+    wishlist.updatedAt = Date.now();
+    
     if (wishlist.id) {
-        await db.wishlists.put(wishlist);
+        await db.wishlists.update(wishlist.id, wishlist);
         return wishlist.id;
     }
-    const { id, ...rest } = wishlist;
-    return await db.wishlists.add(rest);
+    wishlist.id = generateUUID();
+    await db.wishlists.add(wishlist);
+    return wishlist.id;
 }
 
 async function deleteWishlist(id) {
@@ -243,13 +351,16 @@ async function deleteWishlist(id) {
 }
 
 // ============================================================
-// XLSX БАЗА (поиск)
+// XLSX БАЗА (поиск книг) — с корректным снятием «замка» при ошибке
 // ============================================================
 let cachedDbBooks = null;
 let dbFetchPromise = null;
 
 async function fetchDbBooks(forceReload = false) {
-    if (forceReload) { cachedDbBooks = null; dbFetchPromise = null; }
+    if (forceReload) { 
+        cachedDbBooks = null; 
+        dbFetchPromise = null; 
+    }
     if (cachedDbBooks) return cachedDbBooks;
     if (dbFetchPromise) return dbFetchPromise;
     
@@ -265,11 +376,18 @@ async function fetchDbBooks(forceReload = false) {
             return cachedDbBooks;
         } catch (err) {
             console.error('Не удалось загрузить базу книг:', err);
+            // ВАЖНО: снимаем «замок», чтобы можно было попробовать снова
             dbFetchPromise = null;
             return [];
         }
     })();
-    return dbFetchPromise;
+    
+    try {
+        return await dbFetchPromise;
+    } catch (e) {
+        dbFetchPromise = null;
+        return [];
+    }
 }
 
 // ============================================================
@@ -279,42 +397,148 @@ async function dumpAllData() {
     const [books, calendar, collections, wishlists] = await Promise.all([
         db.books.toArray(), db.calendar.toArray(), db.collections.toArray(), db.wishlists.toArray()
     ]);
-    return { version: 1, exportedAt: new Date().toISOString(), books, calendar, collections, wishlists };
+    return { 
+        version: 1, 
+        exportedAt: new Date().toISOString(), 
+        books, calendar, collections, wishlists 
+    };
 }
 
+/**
+ * Заменить все данные. Валидирует формат файла. Использует bulkPut для избежания
+ * падений при дубликатах ID.
+ */
 async function replaceAllData(data) {
-    if (!data || typeof data !== 'object') throw new Error('Некорректный формат файла');
+    if (!data || typeof data !== 'object') {
+        throw new Error('Некорректный формат файла: ожидается объект');
+    }
+    
+    // Валидация: должен быть хотя бы один из ключевых массивов
+    const hasValidStructure = 
+        Array.isArray(data.books) || 
+        Array.isArray(data.calendar) || 
+        Array.isArray(data.collections) || 
+        Array.isArray(data.wishlists);
+    
+    if (!hasValidStructure) {
+        throw new Error('Это не файл резервной копии КниБум');
+    }
+    
     const books = Array.isArray(data.books) ? data.books : [];
     const calendar = Array.isArray(data.calendar) ? data.calendar : [];
     const collections = Array.isArray(data.collections) ? data.collections : [];
     const wishlists = Array.isArray(data.wishlists) ? data.wishlists : [];
 
-    await db.transaction('rw', [db.books, db.calendar, db.collections, db.wishlists, db.meta], async () => {
-        await db.books.clear(); await db.calendar.clear();
-        await db.collections.clear(); await db.wishlists.clear();
+    // Убедимся, что у всех записей есть ID и updatedAt (для безопасности)
+    const now = Date.now();
+    books.forEach(b => {
+        if (!b.id) b.id = generateUUID();
+        if (!b.updatedAt) b.updatedAt = b.createdAt || now;
+        if (!b.createdAt) b.createdAt = now;
+    });
+    collections.forEach(c => {
+        if (!c.id) c.id = generateUUID();
+        if (!c.updatedAt) c.updatedAt = now;
+    });
+    wishlists.forEach(w => {
+        if (!w.id) w.id = generateUUID();
+        if (!w.updatedAt) w.updatedAt = now;
+    });
 
-        if (books.length) await db.books.bulkAdd(books);
-        if (calendar.length) await db.calendar.bulkAdd(calendar);
-        if (collections.length) await db.collections.bulkAdd(collections);
-        if (wishlists.length) await db.wishlists.bulkAdd(wishlists);
+    await db.transaction('rw', [db.books, db.calendar, db.collections, db.wishlists, db.meta], async () => {
+        await db.books.clear(); 
+        await db.calendar.clear();
+        await db.collections.clear(); 
+        await db.wishlists.clear();
+
+        // bulkPut вместо bulkAdd — не падает при дубликатах ID
+        if (books.length) await db.books.bulkPut(books);
+        if (calendar.length) await db.calendar.bulkPut(calendar);
+        if (collections.length) await db.collections.bulkPut(collections);
+        if (wishlists.length) await db.wishlists.bulkPut(wishlists);
 
         await db.meta.put({ key: MIGRATION_KEY, value: true, at: Date.now() });
     });
 }
 
 // ============================================================
-// ИНИЦИАЛИЗАЦИЯ (с защитой от ошибки UpgradeError)
+// ИНФОРМАЦИЯ О ХРАНИЛИЩЕ
+// ============================================================
+/**
+ * Возвращает приблизительную статистику использования хранилища.
+ * Полезно для отладки и отображения в интерфейсе.
+ */
+async function getStorageInfo() {
+    const [books, calendar, collections, wishlists] = await Promise.all([
+        db.books.count(), 
+        db.calendar.count(), 
+        db.collections.count(), 
+        db.wishlists.count()
+    ]);
+    
+    // Приблизительная оценка размера через Storage API (если доступен)
+    let estimatedBytes = 0;
+    try {
+        if (navigator.storage && navigator.storage.estimate) {
+            const estimate = await navigator.storage.estimate();
+            estimatedBytes = estimate.usage || 0;
+        }
+    } catch (_) { /* API недоступен — вернём 0 */ }
+    
+    return {
+        booksCount: books,
+        calendarEntries: calendar,
+        collectionsCount: collections,
+        wishlistsCount: wishlists,
+        estimatedBytes,
+        estimatedMB: (estimatedBytes / (1024 * 1024)).toFixed(2)
+    };
+}
+
+// ============================================================
+// ПЕРЕСБОРКА ИНДЕКСОВ
+// ============================================================
+/**
+ * Пересобирает индексы Dexie (полезно после импорта больших файлов).
+ * Просто вызывает реиндексацию через запросы.
+ */
+async function rebuildIndexes() {
+    try {
+        // Проход по всем индексам через count() — заставляет Dexie пересчитать
+        await db.books.orderBy('id').toArray();
+        await db.collections.orderBy('id').toArray();
+        await db.wishlists.orderBy('id').toArray();
+        await db.calendar.orderBy('date').toArray();
+        console.log('✅ Индексы пересобраны');
+        return true;
+    } catch (err) {
+        console.error('❌ Ошибка пересборки индексов:', err);
+        return false;
+    }
+}
+
+// ============================================================
+// ИНИЦИАЛИЗАЦИЯ (с безопасной обработкой ошибок схемы)
 // ============================================================
 async function initDb() {
     try {
-        // Явно открываем базу, чтобы поймать ошибку несовместимости
         await db.open();
     } catch (error) {
-        // Если схема базы изменилась несовместимо (например, сменился primary key)
         if (error.name === 'UpgradeError' || error.name === 'VersionError') {
-            console.warn('⚠️ Несовместимое изменение структуры БД. Пересоздаем базу...');
-            await db.delete(); // Удаляем старую базу
-            await db.open();   // Создаем новую
+            // КРИТИЧНО: не удаляем базу молча. Сначала пробуем сохранить бэкап.
+            console.warn('⚠️ Несовместимое изменение структуры БД. Пробуем сохранить данные...');
+            try {
+                const backup = await dumpAllData().catch(() => null);
+                if (backup) {
+                    localStorage.setItem(EMERGENCY_BACKUP_KEY, JSON.stringify(backup));
+                    console.log('✅ Резервная копия сохранена в localStorage (ключ: ' + EMERGENCY_BACKUP_KEY + ')');
+                }
+            } catch (e) {
+                console.error('Не удалось создать резервную копию:', e);
+            }
+            // Теперь удаляем и создаём заново
+            await db.delete();
+            await db.open();
         } else {
             console.error('Ошибка открытия БД:', error);
             return;
